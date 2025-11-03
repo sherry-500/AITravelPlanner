@@ -23,14 +23,14 @@ export interface TravelPlan {
   id: string
   userId: string
   title: string
-  origin: string
+  origin?: string
   destination: string
   startDate: string
   endDate: string
   budget: number
   travelers: number
   preferences: string[]
-  transportMode: 'flight' | 'train' | 'car' | 'bus' | 'mixed'
+  transportMode?: 'flight' | 'train' | 'car' | 'bus' | 'mixed'
   itinerary: DayItinerary[]
   expenses: Expense[]
   status: 'draft' | 'confirmed' | 'completed'
@@ -50,12 +50,15 @@ export interface DayItinerary {
 // 活动
 export interface Activity {
   id: string
-  title: string
-  time: string
+  title?: string
+  name?: string
+  time?: string
+  startTime?: string
   type: 'sightseeing' | 'dining' | 'shopping' | 'entertainment' | 'leisure' | 'accommodation' | 'transport'
-  location: string
+  location: string | Location
   duration: number
-  estimatedCost: number
+  estimatedCost?: number
+  cost?: number
   description: string
   rating?: number
   images?: string[]
@@ -92,10 +95,10 @@ export interface Transportation {
 export interface Location {
   name: string
   address: string
-  latitude: number
-  longitude: number
-  city: string
-  country: string
+  latitude?: number
+  longitude?: number
+  city?: string
+  country?: string
 }
 
 // 费用记录
