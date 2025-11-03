@@ -60,9 +60,9 @@ const Planning: React.FC = () => {
   const handleCreatePlan = async (request: PlanningRequest) => {
     setGenerating(true)
     try {
-      const response = await aiPlanningService.generateItinerary(request)
-      addPlan(response.plan)
-      setCurrentPlan(response.plan)
+      const plan = await aiPlanningService.generateItinerary(request)
+      addPlan(plan)
+      setCurrentPlan(plan)
       toast.success('行程规划生成成功！')
       setShowForm(false)
     } catch (error) {

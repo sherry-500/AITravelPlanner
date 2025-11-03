@@ -150,6 +150,10 @@ const PlanDetail: React.FC = () => {
 
   const plan = plans.find(p => p.id === id)
 
+  console.log('Current plans:', plans)
+  console.log('Looking for plan ID:', id)
+  console.log('Found plan:', plan)
+
   if (!plan) {
     return (
       <Container>
@@ -157,6 +161,8 @@ const PlanDetail: React.FC = () => {
           <StyledCard>
             <div style={{ textAlign: 'center', padding: '40px 0' }}>
               <h3>行程不存在</h3>
+              <p>行程 ID: {id}</p>
+              <p>当前存储的行程数量: {plans.length}</p>
               <Button type="primary" onClick={() => navigate('/')}>
                 返回首页
               </Button>
@@ -173,8 +179,8 @@ const PlanDetail: React.FC = () => {
   }
 
   const totalCost = plan.itinerary.reduce((sum, day) => 
-    sum + day.activities.reduce((daySum, activity) => daySum + activity.estimatedCost, 0) +
-    (day.accommodation ? day.accommodation.estimatedCost : 0), 0)
+    sum + day.activities.reduce((daySum, activity) => daySum + (activity.estimatedCost || activity.cost || 0), 0) +
+    (day.accommodation ? (day.accommodation.estimatedCost || day.accommodation.cost || 0) : 0), 0)
 
   return (
     <Container>
@@ -250,13 +256,13 @@ const PlanDetail: React.FC = () => {
                   <ActivityHeader>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
                       <ActivityTitle>
-                        {getActivityTypeIcon(activity.type)} {activity.title}
+                        {getActivityTypeIcon(activity.type)} {activity.title || activity.name}
                       </ActivityTitle>
                       <Tag color={getActivityTypeColor(activity.type)}>
                         {activity.type}
                       </Tag>
                     </div>
-                    <CostBadge>¥{activity.estimatedCost}</CostBadge>
+                    <CostBadge>¥{activity.estimatedCost || activity.cost || 0}</CostBadge>
                   </ActivityHeader>
                   
                   <p style={{ margin: '8px 0', color: '#666' }}>
@@ -264,17 +270,21 @@ const PlanDetail: React.FC = () => {
                   </p>
                   
                   <ActivityMeta>
-                    <span>
-                      <ClockCircleOutlined /> {activity.time}
-                    </span>
-                    <span>
-                      <EnvironmentOutlined /> {activity.location}
-                    </span>
-                    <span>⏱️ {activity.duration} 分钟</span>
-                    {activity.rating && (
-                      <span>⭐ {activity.rating}/5</span>
-                    )}
-                  </ActivityMeta>
+                      <span>
+                        <ClockCircleOutlined /> {activity.time || activity.startTime}
+                      </span>
+                      <span>
+                        <EnvironmentOutlined /> {
+                          typeof activity.location === 'string' 
+                            ? activity.location 
+                            : activity.location?.name || activity.location?.address || '未知地点'
+                        }
+                      </span>
+                      <span>⏱️ {activity.duration} 分钟</span>
+                      {activity.rating && (
+                        <span>⭐ {activity.rating}/5</span>
+                      )}
+                    </ActivityMeta>
                 </ActivityItem>
               ))}
 
@@ -287,12 +297,17 @@ const PlanDetail: React.FC = () => {
                         <ActivityTitle>🏨 {day.accommodation.name}</ActivityTitle>
                         <Tag color="gold">住宿</Tag>
                       </div>
-                      <CostBadge>¥{day.accommodation.estimatedCost}</CostBadge>
+                      <CostBadge>¥{day.accommodation.estimatedCost || day.accommodation.cost || 0}</CostBadge>
                     </ActivityHeader>
                     
                     <ActivityMeta>
                       <span>
-                        <EnvironmentOutlined /> {day.accommodation.address}
+                        <EnvironmentOutlined /> {
+                          day.accommodation.address || 
+                          (typeof day.accommodation.location === 'string' 
+                            ? day.accommodation.location 
+                            : day.accommodation.location?.address || day.accommodation.location?.name || '未知地址')
+                        }
                       </span>
                       <span>入住: {day.accommodation.checkIn}</span>
                       <span>退房: {day.accommodation.checkOut}</span>
