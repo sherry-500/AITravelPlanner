@@ -66,10 +66,17 @@ npm install
 
 ### 配置环境变量
 1. 复制 `.env.example` 到 `.env`
-2. 配置高德地图 API Key：
+2. 配置必要的 API 密钥：
 ```env
-VITE_AMAP_KEY=your_amap_api_key
+# OpenAI API 配置（用于 AI 功能）
+VITE_OPENAI_API_KEY=your_openai_api_key_here
+
+# 可选配置
+VITE_AMAP_API_KEY=your_amap_api_key_here  # 高德地图
+VITE_BAIDU_API_KEY=your_baidu_api_key_here  # 百度语音
 ```
+
+详细配置说明请参考 [API_SETUP.md](./API_SETUP.md)
 
 ### 启动开发服务器
 ```bash
