@@ -1,5 +1,5 @@
 import React, { useState } from 'react'
-import { Card, Form, Input, Button, Select, DatePicker, InputNumber, Tag, Space, message } from 'antd'
+import { Card, Form, Input, Button, Select, DatePicker, InputNumber, Tag, Space, message, Row, Col } from 'antd'
 import { Mic, MicOff } from 'lucide-react'
 import { useSpeechSynthesis, useSpeechRecognition } from '../hooks/useSpeech'
 import { motion } from 'framer-motion'
@@ -79,10 +79,27 @@ const VoicePlanningForm: React.FC<VoicePlanningFormProps> = ({ onSubmit, loading
     // 简单的语音解析逻辑
     const lowerText = text.toLowerCase()
     
+    // 解析出发地
+    const originMatch = text.match(/从(.+?)(?:出发|到|去)/) || text.match(/(.+?)出发/)
+    if (originMatch) {
+      form.setFieldValue('origin', originMatch[1])
+    }
+    
     // 解析目的地
-    const destinationMatch = text.match(/去(.+?)(?:，|,|。|\.|\s|$)/)
+    const destinationMatch = text.match(/去(.+?)(?:，|,|。|\.|\s|$)/) || text.match(/到(.+?)(?:，|,|。|\.|\s|$)/)
     if (destinationMatch) {
       form.setFieldValue('destination', destinationMatch[1])
+    }
+    
+    // 解析出行方式
+    if (text.includes('飞机') || text.includes('坐飞机') || text.includes('航班')) {
+      form.setFieldValue('transportMode', 'flight')
+    } else if (text.includes('火车') || text.includes('高铁') || text.includes('动车')) {
+      form.setFieldValue('transportMode', 'train')
+    } else if (text.includes('自驾') || text.includes('开车') || text.includes('汽车')) {
+      form.setFieldValue('transportMode', 'car')
+    } else if (text.includes('大巴') || text.includes('客车') || text.includes('巴士')) {
+      form.setFieldValue('transportMode', 'bus')
     }
     
     // 解析天数
@@ -139,12 +156,14 @@ const VoicePlanningForm: React.FC<VoicePlanningFormProps> = ({ onSubmit, loading
 
   const handleSubmit = (values: any) => {
     const request: PlanningRequest = {
+      origin: values.origin,
       destination: values.destination,
       startDate: values.dateRange[0].format('YYYY-MM-DD'),
       endDate: values.dateRange[1].format('YYYY-MM-DD'),
       budget: values.budget,
       travelers: values.travelers,
       preferences: selectedPreferences,
+      transportMode: values.transportMode,
       additionalRequirements: values.additionalRequirements,
     }
     onSubmit(request)
@@ -194,12 +213,49 @@ const VoicePlanningForm: React.FC<VoicePlanningFormProps> = ({ onSubmit, loading
             </div>
 
             {/* 表单字段 */}
+            <Row gutter={16}>
+              <Col span={12}>
+                <Form.Item
+                  name="origin"
+                  label="出发地"
+                  rules={[{ required: true, message: '请输入出发地' }]}
+                >
+                  <Input placeholder="例如：北京、上海、广州" size="large" />
+                </Form.Item>
+              </Col>
+              <Col span={12}>
+                <Form.Item
+                  name="destination"
+                  label="目的地"
+                  rules={[{ required: true, message: '请输入目的地' }]}
+                >
+                  <Input placeholder="例如：日本、巴黎、三亚" size="large" />
+                </Form.Item>
+              </Col>
+            </Row>
+
             <Form.Item
-              name="destination"
-              label="目的地"
-              rules={[{ required: true, message: '请输入目的地' }]}
+              name="transportMode"
+              label="出行方式"
+              rules={[{ required: true, message: '请选择出行方式' }]}
             >
-              <Input placeholder="例如：日本、巴黎、三亚" size="large" />
+              <Select placeholder="选择出行方式" size="large">
+                <Select.Option value="flight">
+                  ✈️ 飞机 - 快速便捷，适合长途旅行
+                </Select.Option>
+                <Select.Option value="train">
+                  🚄 火车/高铁 - 舒适安全，风景优美
+                </Select.Option>
+                <Select.Option value="car">
+                  🚗 自驾 - 自由灵活，深度体验
+                </Select.Option>
+                <Select.Option value="bus">
+                  🚌 大巴 - 经济实惠，适合短途
+                </Select.Option>
+                <Select.Option value="mixed">
+                  🔄 混合出行 - 根据行程灵活选择
+                </Select.Option>
+              </Select>
             </Form.Item>
 
             <Form.Item

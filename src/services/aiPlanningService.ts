@@ -34,13 +34,15 @@ class AIPlanningService {
     return {
       id: Date.now().toString(),
       userId: 'current-user',
-      title: `${request.destination}${days}日游`,
+      title: `${request.origin}到${request.destination}${days}日游`,
+      origin: request.origin,
       destination: request.destination,
       startDate: request.startDate,
       endDate: request.endDate,
       budget: request.budget,
       travelers: request.travelers,
       preferences: request.preferences,
+      transportMode: request.transportMode,
       itinerary,
       expenses: [],
       status: 'draft',
@@ -51,6 +53,12 @@ class AIPlanningService {
 
   private generateDayItinerary(day: number, date: Date, request: PlanningRequest): DayItinerary {
     const activities: Activity[] = []
+    
+    // 第一天添加交通活动
+    if (day === 1) {
+      const transportActivity = this.generateTransportActivity(request)
+      activities.push(transportActivity)
+    }
     
     // 根据偏好生成活动
     if (request.preferences.includes('美食')) {
@@ -93,11 +101,11 @@ class AIPlanningService {
     }
 
     // 默认活动
-    if (activities.length === 0) {
+    if (activities.length === (day === 1 ? 1 : 0)) {
       activities.push(
         {
           id: `${day}-default-1`,
-          time: '09:00',
+          time: day === 1 ? '10:00' : '09:00',
           title: '景点游览',
           description: '游览当地著名景点',
           location: `${request.destination}景区`,
@@ -132,6 +140,59 @@ class AIPlanningService {
         rating: 4.5,
         amenities: ['WiFi', '早餐', '健身房'],
       } : undefined,
+    }
+  }
+
+  private generateTransportActivity(request: PlanningRequest): Activity {
+    const transportInfo = {
+      flight: {
+        title: `${request.origin} ✈️ ${request.destination}`,
+        description: `乘坐航班从${request.origin}飞往${request.destination}`,
+        cost: Math.floor(request.budget * 0.25 / request.travelers),
+        duration: 180,
+        time: '08:00'
+      },
+      train: {
+        title: `${request.origin} 🚄 ${request.destination}`,
+        description: `乘坐高铁/火车从${request.origin}前往${request.destination}`,
+        cost: Math.floor(request.budget * 0.15 / request.travelers),
+        duration: 300,
+        time: '07:30'
+      },
+      car: {
+        title: `${request.origin} 🚗 ${request.destination}`,
+        description: `自驾从${request.origin}前往${request.destination}`,
+        cost: Math.floor(request.budget * 0.1 / request.travelers),
+        duration: 480,
+        time: '06:00'
+      },
+      bus: {
+        title: `${request.origin} 🚌 ${request.destination}`,
+        description: `乘坐大巴从${request.origin}前往${request.destination}`,
+        cost: Math.floor(request.budget * 0.08 / request.travelers),
+        duration: 420,
+        time: '07:00'
+      },
+      mixed: {
+        title: `${request.origin} 🔄 ${request.destination}`,
+        description: `多种交通方式组合前往${request.destination}`,
+        cost: Math.floor(request.budget * 0.18 / request.travelers),
+        duration: 240,
+        time: '08:00'
+      }
+    }
+
+    const transport = transportInfo[request.transportMode]
+    
+    return {
+      id: '1-transport-1',
+      time: transport.time,
+      title: transport.title,
+      description: transport.description,
+      location: `${request.origin} → ${request.destination}`,
+      type: 'transport',
+      estimatedCost: transport.cost,
+      duration: transport.duration,
     }
   }
 }

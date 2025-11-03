@@ -23,12 +23,14 @@ export interface TravelPlan {
   id: string
   userId: string
   title: string
+  origin: string
   destination: string
   startDate: string
   endDate: string
   budget: number
   travelers: number
   preferences: string[]
+  transportMode: 'flight' | 'train' | 'car' | 'bus' | 'mixed'
   itinerary: DayItinerary[]
   expenses: Expense[]
   status: 'draft' | 'confirmed' | 'completed'
@@ -118,12 +120,14 @@ export interface VoiceRecognitionResult {
 
 // AI 规划请求
 export interface PlanningRequest {
+  origin: string
   destination: string
   startDate: string
   endDate: string
   budget: number
   travelers: number
   preferences: string[]
+  transportMode: 'flight' | 'train' | 'car' | 'bus' | 'mixed'
   additionalRequirements?: string
 }
 

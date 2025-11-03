@@ -143,6 +143,28 @@ const getActivityTypeIcon = (type: string) => {
   return icons[type] || '📍'
 }
 
+const getTransportModeColor = (mode: string) => {
+  const colors: Record<string, string> = {
+    flight: 'blue',
+    train: 'green',
+    car: 'orange',
+    bus: 'purple',
+    mixed: 'cyan',
+  }
+  return colors[mode] || 'default'
+}
+
+const getTransportModeText = (mode: string) => {
+  const texts: Record<string, string> = {
+    flight: '✈️ 飞机',
+    train: '🚄 火车/高铁',
+    car: '🚗 自驾',
+    bus: '🚌 大巴',
+    mixed: '🔄 混合出行',
+  }
+  return texts[mode] || '🔄 混合出行'
+}
+
 const PlanDetail: React.FC = () => {
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
@@ -216,7 +238,13 @@ const PlanDetail: React.FC = () => {
 
         <StyledCard title="📋 行程概览">
           <Descriptions column={2} bordered>
+            <Descriptions.Item label="出发地">{plan.origin || '未设置'}</Descriptions.Item>
             <Descriptions.Item label="目的地">{plan.destination}</Descriptions.Item>
+            <Descriptions.Item label="出行方式">
+              <Tag color={getTransportModeColor(plan.transportMode || 'mixed')}>
+                {getTransportModeText(plan.transportMode || 'mixed')}
+              </Tag>
+            </Descriptions.Item>
             <Descriptions.Item label="出行日期">
               {plan.startDate} 至 {plan.endDate}
             </Descriptions.Item>
