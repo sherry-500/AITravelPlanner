@@ -2,6 +2,7 @@ import React, { useState } from 'react'
 import { Row, Col, Card, List, Button, Space, Tag, Modal, Empty } from 'antd'
 import { EditOutlined, DeleteOutlined, EyeOutlined, CalendarOutlined } from '@ant-design/icons'
 import { motion } from 'framer-motion'
+import { useNavigate } from 'react-router-dom'
 import styled from 'styled-components'
 import VoicePlanningForm from '../components/VoicePlanningForm'
 import ItineraryDisplay from '../components/ItineraryDisplay'
@@ -42,9 +43,8 @@ const PlanCard = styled(Card)`
 `
 
 const Planning: React.FC = () => {
+  const navigate = useNavigate()
   const [showForm, setShowForm] = useState(false)
-  const [selectedPlan, setSelectedPlan] = useState<TravelPlan | null>(null)
-  const [showDetail, setShowDetail] = useState(false)
   
   const { 
     plans, 
@@ -74,9 +74,7 @@ const Planning: React.FC = () => {
   }
 
   const handleViewPlan = (plan: TravelPlan) => {
-    setSelectedPlan(plan)
-    setCurrentPlan(plan)
-    setShowDetail(true)
+    navigate(`/plan/${plan.id}`)
   }
 
   const handleEditPlan = (plan: TravelPlan) => {
@@ -159,33 +157,7 @@ const Planning: React.FC = () => {
     )
   }
 
-  if (showDetail && selectedPlan) {
-    return (
-      <PageContainer>
-        <Row gutter={[24, 24]}>
-          <Col xs={24} lg={14}>
-            <ItineraryDisplay 
-              plan={selectedPlan} 
-              onEdit={() => {
-                setShowDetail(false)
-                handleEditPlan(selectedPlan)
-              }}
-              onSave={handleSavePlan}
-            />
-            <Button 
-              style={{ marginTop: 16 }} 
-              onClick={() => setShowDetail(false)}
-            >
-              返回列表
-            </Button>
-          </Col>
-          <Col xs={24} lg={10}>
-            <MapDisplay plan={selectedPlan} />
-          </Col>
-        </Row>
-      </PageContainer>
-    )
-  }
+  
 
   return (
     <PageContainer>
@@ -299,12 +271,12 @@ const Planning: React.FC = () => {
                               <span style={{ color: '#666' }}>🏷️ 偏好：</span>
                               <div style={{ marginTop: 4 }}>
                                 {plan.preferences.slice(0, 3).map((pref, index) => (
-                                  <Tag key={index} size="small" style={{ margin: '2px' }}>
+                                  <Tag key={index} style={{ margin: '2px' }}>
                                     {pref}
                                   </Tag>
                                 ))}
                                 {plan.preferences.length > 3 && (
-                                  <Tag size="small" style={{ margin: '2px' }}>
+                                  <Tag style={{ margin: '2px' }}>
                                     +{plan.preferences.length - 3}
                                   </Tag>
                                 )}

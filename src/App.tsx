@@ -7,6 +7,7 @@ import Planning from './pages/Planning'
 import Budget from './pages/Budget'
 import Profile from './pages/Profile'
 import Login from './pages/Login'
+import PlanDetail from './pages/PlanDetail'
 import { useAuthStore } from './store/authStore'
 
 const { Content } = Layout
@@ -25,6 +26,7 @@ function App() {
         <Routes>
           <Route path="/" element={<Home />} />
           <Route path="/planning" element={<Planning />} />
+          <Route path="/plan/:id" element={<PlanDetail />} />
           <Route path="/budget" element={<Budget />} />
           <Route path="/profile" element={<Profile />} />
         </Routes>

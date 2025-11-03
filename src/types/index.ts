@@ -43,19 +43,17 @@ export interface DayItinerary {
   activities: Activity[]
   accommodation?: Accommodation
   transportation?: Transportation[]
-  totalCost: number
 }
 
 // 活动
 export interface Activity {
   id: string
-  name: string
-  type: 'attraction' | 'restaurant' | 'shopping' | 'entertainment' | 'other'
-  location: Location
-  startTime: string
-  endTime: string
+  title: string
+  time: string
+  type: 'sightseeing' | 'dining' | 'shopping' | 'entertainment' | 'leisure' | 'accommodation' | 'transport'
+  location: string
   duration: number
-  cost: number
+  estimatedCost: number
   description: string
   rating?: number
   images?: string[]
@@ -66,14 +64,12 @@ export interface Activity {
 export interface Accommodation {
   id: string
   name: string
-  type: 'hotel' | 'hostel' | 'apartment' | 'resort'
-  location: Location
+  address: string
   checkIn: string
   checkOut: string
-  cost: number
-  rating?: number
+  estimatedCost: number
+  rating: number
   amenities: string[]
-  images?: string[]
 }
 
 // 交通

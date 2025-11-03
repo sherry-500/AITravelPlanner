@@ -1,7 +1,8 @@
 import React, { useState } from 'react'
 import { Row, Col, Typography, Button, Space, Card, Statistic } from 'antd'
-import { PlusOutlined, CalendarOutlined, DollarOutlined, EnvironmentOutlined } from '@ant-design/icons'
+import { PlusOutlined, CalendarOutlined, DollarOutlined, EnvironmentOutlined, EyeOutlined } from '@ant-design/icons'
 import { motion } from 'framer-motion'
+import { useNavigate } from 'react-router-dom'
 import styled from 'styled-components'
 import VoicePlanningForm from '../components/VoicePlanningForm'
 import ItineraryDisplay from '../components/ItineraryDisplay'
@@ -51,6 +52,7 @@ const QuickActionCard = styled(Card)`
 `
 
 const Home: React.FC = () => {
+  const navigate = useNavigate()
   const [showPlanningForm, setShowPlanningForm] = useState(false)
   const { user } = useAuthStore()
   const { plans, currentPlan, isGenerating, addPlan, setCurrentPlan, setGenerating } = usePlanningStore()
@@ -146,7 +148,11 @@ const Home: React.FC = () => {
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.6, delay: 0.1 }}
             >
-              <StatsCard>
+              <StatsCard 
+                hoverable
+                onClick={() => navigate('/planning')}
+                style={{ cursor: 'pointer' }}
+              >
                 <Statistic
                   title="总旅行计划"
                   value={totalTrips}
@@ -222,7 +228,10 @@ const Home: React.FC = () => {
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.6, delay: 0.5 }}
             >
-              <QuickActionCard hoverable>
+              <QuickActionCard 
+                hoverable
+                onClick={() => navigate('/planning')}
+              >
                 <div style={{ textAlign: 'center', padding: '24px 0' }}>
                   <CalendarOutlined style={{ fontSize: '48px', color: '#52c41a', marginBottom: 16 }} />
                   <Title level={4} style={{ margin: 0 }}>我的行程</Title>
@@ -274,7 +283,7 @@ const Home: React.FC = () => {
                       backdropFilter: 'blur(10px)',
                       borderRadius: '12px',
                     }}
-                    onClick={() => setCurrentPlan(plan)}
+                    onClick={() => navigate(`/plan/${plan.id}`)}
                   >
                     <Card.Meta
                       title={plan.title}
