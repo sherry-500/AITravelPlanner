@@ -69,7 +69,19 @@ const MapDisplay: React.FC<MapDisplayProps> = ({ plan }) => {
   const [markers, setMarkers] = useState<any[]>([])
 
   useEffect(() => {
-    if (!mapRef.current || !window.AMap) return
+    // 检查高德地图 API 是否加载
+    if (!window.AMap) {
+      console.error('高德地图 API 未加载，请检查网络连接或 API Key')
+      setLoading(false)
+      return
+    }
+    
+    if (!mapRef.current) {
+      console.error('地图容器未找到')
+      setLoading(false)
+      return
+    }
+    
     initMap()
   }, [])
 
@@ -82,22 +94,44 @@ const MapDisplay: React.FC<MapDisplayProps> = ({ plan }) => {
   const initMap = () => {
     setLoading(true)
     
-    const mapInstance = new window.AMap.Map(mapRef.current, {
-      zoom: 12,
-      center: [116.397428, 39.90923], // 默认北京
-      mapStyle: 'amap://styles/normal',
-      viewMode: '3D',
-      pitch: 30,
-      features: ['bg', 'road', 'building', 'point']
-    })
+    try {
+      console.log('开始初始化地图...')
+      
+      const mapInstance = new window.AMap.Map(mapRef.current, {
+        zoom: 12,
+        center: [116.397428, 39.90923], // 默认北京
+        mapStyle: 'amap://styles/normal',
+        viewMode: '2D', // 先使用 2D 模式确保稳定性
+        features: ['bg', 'road', 'building', 'point']
+      })
 
-    // 添加地图控件
-    mapInstance.addControl(new window.AMap.Scale())
-    mapInstance.addControl(new window.AMap.ToolBar())
-    mapInstance.addControl(new window.AMap.ControlBar())
+      // 地图加载完成事件
+      mapInstance.on('complete', () => {
+        console.log('地图加载完成')
+        
+        // 添加地图控件
+        try {
+          mapInstance.addControl(new window.AMap.Scale())
+          mapInstance.addControl(new window.AMap.ToolBar())
+          console.log('地图控件添加成功')
+        } catch (error) {
+          console.warn('地图控件添加失败:', error)
+        }
 
-    setMap(mapInstance)
-    setLoading(false)
+        setMap(mapInstance)
+        setLoading(false)
+      })
+
+      // 地图加载失败事件
+      mapInstance.on('error', (error) => {
+        console.error('地图加载失败:', error)
+        setLoading(false)
+      })
+
+    } catch (error) {
+      console.error('地图初始化失败:', error)
+      setLoading(false)
+    }
   }
 
   const updateMapWithPlan = async () => {

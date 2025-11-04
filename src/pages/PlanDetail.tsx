@@ -6,7 +6,7 @@ import styled from 'styled-components'
 import { motion } from 'framer-motion'
 import { usePlanningStore } from '../store/planningStore'
 import { Activity } from '../types'
-import MapDisplay from '../components/MapDisplay'
+import SimpleMapDisplay from '../components/SimpleMapDisplay'
 
 const Container = styled.div`
   min-height: 100vh;
@@ -525,10 +525,10 @@ const PlanDetail: React.FC = () => {
             </StyledCard>
           </Col>
 
-          {showMap && plan.origin && plan.transportMode && (
+          {showMap && (
             <Col xs={24} lg={10}>
               <MapCard>
-                <MapDisplay plan={plan} />
+                <SimpleMapDisplay />
               </MapCard>
             </Col>
           )}
