@@ -48,10 +48,11 @@ const PreferenceTag = styled(Tag)`
 
 interface VoicePlanningFormProps {
   onSubmit: (request: PlanningRequest) => void
+  onCancel?: () => void
   loading?: boolean
 }
 
-const VoicePlanningForm: React.FC<VoicePlanningFormProps> = ({ onSubmit, loading }) => {
+const VoicePlanningForm: React.FC<VoicePlanningFormProps> = ({ onSubmit, onCancel, loading }) => {
   const [form] = Form.useForm()
   const [selectedPreferences, setSelectedPreferences] = useState<string[]>([])
   const [voiceInput, setVoiceInput] = useState('')
@@ -319,21 +320,35 @@ const VoicePlanningForm: React.FC<VoicePlanningFormProps> = ({ onSubmit, loading
             </Form.Item>
 
             <Form.Item>
-              <Button
-                type="primary"
-                htmlType="submit"
-                size="large"
-                loading={loading}
-                style={{
-                  width: '100%',
-                  height: 48,
-                  borderRadius: 8,
-                  background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-                  border: 'none',
-                }}
-              >
-                🚀 生成智能行程
-              </Button>
+              <Space style={{ width: '100%' }}>
+                <Button
+                  type="primary"
+                  htmlType="submit"
+                  size="large"
+                  loading={loading}
+                  style={{
+                    flex: 1,
+                    height: 48,
+                    borderRadius: 8,
+                    background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                    border: 'none',
+                  }}
+                >
+                  🚀 生成智能行程
+                </Button>
+                {onCancel && (
+                  <Button
+                    size="large"
+                    onClick={onCancel}
+                    style={{
+                      height: 48,
+                      borderRadius: 8,
+                    }}
+                  >
+                    取消
+                  </Button>
+                )}
+              </Space>
             </Form.Item>
           </Space>
         </Form>
