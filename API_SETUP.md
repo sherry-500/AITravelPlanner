@@ -10,17 +10,17 @@
 cp .env.example .env
 ```
 
-### 2. 配置 OpenAI API 密钥
+### 2. 配置 DeepSeek API 密钥
 
-编辑 `.env` 文件，添加您的 OpenAI API 密钥：
+编辑 `.env` 文件，添加您的 DeepSeek API 密钥：
 
 ```env
-VITE_OPENAI_API_KEY=sk-your-actual-openai-api-key-here
-VITE_OPENAI_BASE_URL=https://api.openai.com/v1
+VITE_DEEPSEEK_API_KEY=sk-your-actual-deepseek-api-key-here
+VITE_DEEPSEEK_BASE_URL=https://api.deepseek.com/v1
 ```
 
-#### 获取 OpenAI API 密钥：
-1. 访问 [OpenAI Platform](https://platform.openai.com/)
+#### 获取 DeepSeek API 密钥：
+1. 访问 [DeepSeek Platform](https://platform.deepseek.com/)
 2. 注册/登录账户
 3. 进入 API Keys 页面
 4. 点击 "Create new secret key"
@@ -77,7 +77,7 @@ npm run dev
 ## 🚀 当前功能状态
 
 - ✅ **基础功能**：无需 API 密钥即可使用（使用模拟数据）
-- 🔑 **AI 功能**：需要 OpenAI API 密钥
+- 🔑 **AI 功能**：需要 DeepSeek API 密钥
 - 🎤 **语音功能**：可选百度语音 API
 - 🗺️ **地图功能**：可选高德地图 API
 

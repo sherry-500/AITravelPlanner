@@ -68,8 +68,8 @@ npm install
 1. 复制 `.env.example` 到 `.env`
 2. 配置必要的 API 密钥：
 ```env
-# OpenAI API 配置（用于 AI 功能）
-VITE_OPENAI_API_KEY=your_openai_api_key_here
+# DeepSeek API 配置（用于 AI 功能）
+VITE_DEEPSEEK_API_KEY=your_deepseek_api_key_here
 
 # 可选配置
 VITE_AMAP_API_KEY=your_amap_api_key_here  # 高德地图

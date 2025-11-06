@@ -21,6 +21,10 @@ export const usePlanningStore = create<PlanningState>()(
       isGenerating: false,
 
       addPlan: (plan: TravelPlan) => {
+        if (!plan || !plan.title) {
+          console.error('Invalid plan data:', plan)
+          return
+        }
         set((state) => ({
           plans: [...state.plans, plan],
         }))
@@ -58,7 +62,7 @@ export const usePlanningStore = create<PlanningState>()(
     {
       name: 'planning-storage',
       partialize: (state) => ({
-        plans: state.plans,
+        plans: state.plans.filter(plan => plan && plan.title),
         currentPlan: state.currentPlan,
       }),
     }

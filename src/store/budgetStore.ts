@@ -1,14 +1,6 @@
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
-
-export interface Expense {
-  id: string
-  amount: number
-  category: string
-  description: string
-  date: string
-  planId?: string
-}
+import { Expense } from '../types'
 
 interface BudgetState {
   expenses: Expense[]

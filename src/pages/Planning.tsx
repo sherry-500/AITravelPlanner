@@ -200,7 +200,7 @@ const Planning: React.FC = () => {
           ) : (
             <List
               grid={{ gutter: 16, xs: 1, sm: 1, md: 2, lg: 2, xl: 3 }}
-              dataSource={plans}
+              dataSource={plans.filter(plan => plan && plan.id && plan.title)}
               renderItem={(plan) => (
                 <List.Item>
                   <motion.div
@@ -210,7 +210,7 @@ const Planning: React.FC = () => {
                   >
                     <PlanCard
                       hoverable
-                      actions={[
+                      actions={plan ? [
                         <Button
                           key="view"
                           type="text"
@@ -236,55 +236,57 @@ const Planning: React.FC = () => {
                         >
                           删除
                         </Button>,
-                      ]}
+                      ] : []}
                     >
-                      <Card.Meta
-                        title={
-                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                            <span>{plan.title}</span>
-                            <Tag color={getStatusColor(plan.status)}>
-                              {getStatusText(plan.status)}
-                            </Tag>
-                          </div>
-                        }
-                        description={
-                          <Space direction="vertical" size="small" style={{ width: '100%' }}>
-                            <div>
-                              <span style={{ color: '#666' }}>📍 目的地：</span>
-                              <span>{plan.destination}</span>
+                      {plan && (
+                        <Card.Meta
+                          title={
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                              <span>{plan.title || '未命名计划'}</span>
+                              <Tag color={getStatusColor(plan.status || 'draft')}>
+                                {getStatusText(plan.status || 'draft')}
+                              </Tag>
                             </div>
-                            <div>
-                              <span style={{ color: '#666' }}>📅 日期：</span>
-                              <span>
-                                {dayjs(plan.startDate).format('MM-DD')} 至 {dayjs(plan.endDate).format('MM-DD')}
-                              </span>
-                            </div>
-                            <div>
-                              <span style={{ color: '#666' }}>💰 预算：</span>
-                              <span>¥{plan.budget.toLocaleString()}</span>
-                            </div>
-                            <div>
-                              <span style={{ color: '#666' }}>👥 人数：</span>
-                              <span>{plan.travelers} 人</span>
-                            </div>
-                            <div>
-                              <span style={{ color: '#666' }}>🏷️ 偏好：</span>
-                              <div style={{ marginTop: 4 }}>
-                                {plan.preferences.slice(0, 3).map((pref, index) => (
-                                  <Tag key={index} style={{ margin: '2px' }}>
-                                    {pref}
-                                  </Tag>
-                                ))}
-                                {plan.preferences.length > 3 && (
-                                  <Tag style={{ margin: '2px' }}>
-                                    +{plan.preferences.length - 3}
-                                  </Tag>
-                                )}
+                          }
+                          description={
+                            <Space direction="vertical" size="small" style={{ width: '100%' }}>
+                              <div>
+                                <span style={{ color: '#666' }}>📍 目的地：</span>
+                                <span>{plan.destination || '未设置'}</span>
                               </div>
-                            </div>
-                          </Space>
-                        }
-                      />
+                              <div>
+                                <span style={{ color: '#666' }}>📅 日期：</span>
+                                <span>
+                                  {plan.startDate ? dayjs(plan.startDate).format('MM-DD') : '未设置'} 至 {plan.endDate ? dayjs(plan.endDate).format('MM-DD') : '未设置'}
+                                </span>
+                              </div>
+                              <div>
+                                <span style={{ color: '#666' }}>💰 预算：</span>
+                                <span>¥{(plan.budget || 0).toLocaleString()}</span>
+                              </div>
+                              <div>
+                                <span style={{ color: '#666' }}>👥 人数：</span>
+                                <span>{plan.travelers || 0} 人</span>
+                              </div>
+                              <div>
+                                <span style={{ color: '#666' }}>🏷️ 偏好：</span>
+                                <div style={{ marginTop: 4 }}>
+                                  {(plan.preferences || []).slice(0, 3).map((pref, index) => (
+                                    <Tag key={index} style={{ margin: '2px' }}>
+                                      {pref}
+                                    </Tag>
+                                  ))}
+                                  {(plan.preferences || []).length > 3 && (
+                                    <Tag style={{ margin: '2px' }}>
+                                      +{(plan.preferences || []).length - 3}
+                                    </Tag>
+                                  )}
+                                </div>
+                              </div>
+                            </Space>
+                          }
+                        />
+                      )}
                     </PlanCard>
                   </motion.div>
                 </List.Item>

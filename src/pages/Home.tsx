@@ -284,7 +284,7 @@ const Home: React.FC = () => {
               <Col span={24}>
                 <StatCard
                   whileHover={{ scale: 1.02 }}
-                  onClick={() => navigate('/expenses')}
+                  onClick={() => navigate('/budget')}
                 >
                   <Statistic
                     title="总费用支出"
@@ -323,7 +323,7 @@ const Home: React.FC = () => {
 
               <QuickActionCard
                 whileHover={{ scale: 1.02 }}
-                onClick={() => navigate('/expenses')}
+                onClick={() => navigate('/budget')}
               >
                 <DollarOutlined style={{ fontSize: '32px', marginBottom: '12px' }} />
                 <h3 style={{ color: 'white', margin: '0 0 8px 0' }}>费用管理</h3>
@@ -349,7 +349,7 @@ const Home: React.FC = () => {
               }
             >
               {recentPlans.length > 0 ? (
-                recentPlans.map((plan, index) => (
+                recentPlans.filter(plan => plan && plan.title).map((plan, index) => (
                   <PlanCard
                     key={plan.id}
                     initial={{ opacity: 0, y: 20 }}

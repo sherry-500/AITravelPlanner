@@ -6,14 +6,14 @@ class AIPlanningService {
   private baseUrl: string
 
   constructor() {
-    // 从 .env 文件读取 API Key
     this.apiKey = import.meta.env.VITE_DEEPSEEK_API_KEY || ''
     this.baseUrl = import.meta.env.VITE_DEEPSEEK_BASE_URL || 'https://api.deepseek.com/v1'
     
     // 调试信息
-    console.log('DeepSeek API 配置:')
+    console.log('DeepSeek API 配置 [UPDATED]:')
     console.log('API Key:', this.apiKey ? `${this.apiKey.substring(0, 10)}...` : '未配置')
     console.log('Base URL:', this.baseUrl)
+    console.log('Full API Key for debug:', this.apiKey)
   }
 
   async generateItinerary(request: PlanningRequest): Promise<TravelPlan> {

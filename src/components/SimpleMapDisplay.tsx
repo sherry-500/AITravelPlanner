@@ -111,6 +111,11 @@ const RealMapDisplay: React.FC<RealMapDisplayProps> = ({ plan }) => {
         throw new Error('地图容器未找到')
       }
 
+      // 等待高德地图API完全加载
+      if (!window.AMap) {
+        throw new Error('高德地图API未加载')
+      }
+
       // 创建地图实例
       const map = new window.AMap.Map(mapRef.current, {
         zoom: 12,
@@ -118,17 +123,26 @@ const RealMapDisplay: React.FC<RealMapDisplayProps> = ({ plan }) => {
         mapStyle: 'amap://styles/normal',
         viewMode: '2D',
         features: ['bg', 'road', 'building', 'point'],
-        showLabel: true
+        showLabel: true,
+        resizeEnable: true
       })
 
       // 添加地图控件
-      map.addControl(new window.AMap.Scale())
-      map.addControl(new window.AMap.ToolBar({
-        locate: true,
-        noIpLocate: true,
-        locateTimeout: 3000,
-        useNative: true
-      }))
+      try {
+        map.addControl(new window.AMap.Scale({
+          position: 'LB'
+        }))
+        map.addControl(new window.AMap.ToolBar({
+          position: 'RT',
+          locate: true,
+          noIpLocate: true,
+          locateTimeout: 3000,
+          useNative: true
+        }))
+      } catch (controlError) {
+        console.warn('地图控件添加失败:', controlError)
+        // 控件添加失败不影响地图基本功能
+      }
 
       mapInstanceRef.current = map
 
