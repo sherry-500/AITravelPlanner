@@ -2,6 +2,8 @@ import React, { useEffect, useRef, useState } from 'react'
 import { Card, Tabs, Button, Space, Typography, Tag, Spin, Alert } from 'antd'
 import { ClockCircleOutlined, CarOutlined, WalkingOutlined, EnvironmentOutlined } from '@ant-design/icons'
 import type { TravelPlan, DayItinerary, Activity } from '../types'
+import { geocodingService } from '../services/geocodingService'
+import { apiConfigService } from '../services/apiConfigService'
 
 const { Title, Text, Paragraph } = Typography
 const { TabPane } = Tabs
@@ -40,15 +42,137 @@ const ItineraryMapDisplay: React.FC<ItineraryMapDisplayProps> = ({
   }
 
   // 将活动转换为地图点位
-  const convertActivitiesToMapPoints = (activities: Activity[]): MapPoint[] => {
-    return activities.map((activity, index) => ({
-      lng: activity.location?.lng || 120.1551 + Math.random() * 0.01, // 默认杭州坐标
-      lat: activity.location?.lat || 30.2741 + Math.random() * 0.01,
-      name: activity.name,
-      address: activity.location?.address || '地址待定',
-      activity,
-      index: index + 1
-    }))
+  const convertActivitiesToMapPoints = async (activities: Activity[]): Promise<MapPoint[]> => {
+    const mapPoints: MapPoint[] = []
+    
+    for (let index = 0; index < activities.length; index++) {
+      const activity = activities[index]
+      let lng: number = 120.1551 // 默认杭州坐标
+      let lat: number = 30.2741
+      let address = '地址待定'
+      
+      if (activity.location) {
+        if (typeof activity.location === 'object') {
+          // 确保坐标是有效的数字，支持多种坐标字段名
+          const locLng = parseFloat(String(activity.location.lng || activity.location.longitude || 0))
+          const locLat = parseFloat(String(activity.location.lat || activity.location.latitude || 0))
+          
+          if (!isNaN(locLng) && !isNaN(locLat) && 
+              isFinite(locLng) && isFinite(locLat) &&
+              locLng >= -180 && locLng <= 180 &&
+              locLat >= -90 && locLat <= 90 &&
+              locLng !== 0 && locLat !== 0) { // 排除 (0,0) 坐标
+            lng = locLng
+            lat = locLat
+          }
+          
+          address = activity.location.address || activity.location.name || address
+        } else {
+          address = activity.location
+        }
+      }
+      
+      // 如果没有有效坐标，尝试通过地理编码获取真实坐标
+      if (lng === 120.1551 && lat === 30.2741) {
+        const searchAddress = activity.location?.address || activity.location || activity.name || ''
+        
+        if (searchAddress && searchAddress !== '地址待定' && searchAddress.trim() !== '') {
+          try {
+            // 根据目的地确定城市参数
+            let city = ''
+            const locationText = searchAddress.toLowerCase()
+            
+            if (locationText.includes('伦敦') || locationText.includes('london')) {
+              city = 'London'
+            } else if (locationText.includes('巴黎') || locationText.includes('paris')) {
+              city = 'Paris'
+            } else if (locationText.includes('东京') || locationText.includes('tokyo')) {
+              city = 'Tokyo'
+            } else if (locationText.includes('纽约') || locationText.includes('new york')) {
+              city = 'New York'
+            } else if (locationText.includes('上海')) {
+              city = '上海'
+            } else if (locationText.includes('北京')) {
+              city = '北京'
+            }
+            
+            const geocodeResult = await geocodingService.getCoordinates(searchAddress, city)
+            
+            if (geocodeResult) {
+              lng = geocodeResult.lng
+              lat = geocodeResult.lat
+              address = geocodeResult.address
+              console.log(`获取到真实坐标: ${searchAddress} -> [${lng}, ${lat}]`)
+            } else {
+              // 地理编码失败，使用基于城市的默认坐标
+              if (locationText.includes('伦敦') || locationText.includes('london')) {
+                lng = -0.1276 + (Math.random() - 0.5) * 0.05
+                lat = 51.5074 + (Math.random() - 0.5) * 0.05
+              } else if (locationText.includes('巴黎') || locationText.includes('paris')) {
+                lng = 2.3522 + (Math.random() - 0.5) * 0.05
+                lat = 48.8566 + (Math.random() - 0.5) * 0.05
+              } else if (locationText.includes('东京') || locationText.includes('tokyo')) {
+                lng = 139.6917 + (Math.random() - 0.5) * 0.05
+                lat = 35.6895 + (Math.random() - 0.5) * 0.05
+              } else if (locationText.includes('纽约') || locationText.includes('new york')) {
+                lng = -74.0060 + (Math.random() - 0.5) * 0.05
+                lat = 40.7128 + (Math.random() - 0.5) * 0.05
+              } else {
+                // 保持默认杭州坐标，添加小的随机偏移
+                lng = 120.1551 + (Math.random() - 0.5) * 0.05
+                lat = 30.2741 + (Math.random() - 0.5) * 0.05
+              }
+              console.warn(`地理编码失败，使用默认坐标: ${searchAddress}`)
+            }
+          } catch (geocodeError) {
+            console.error(`地理编码服务调用失败: ${searchAddress}`, geocodeError)
+            // 使用基于城市的默认坐标
+            const locationText = searchAddress.toLowerCase()
+            if (locationText.includes('伦敦') || locationText.includes('london')) {
+              lng = -0.1276 + (Math.random() - 0.5) * 0.05
+              lat = 51.5074 + (Math.random() - 0.5) * 0.05
+            } else if (locationText.includes('巴黎') || locationText.includes('paris')) {
+              lng = 2.3522 + (Math.random() - 0.5) * 0.05
+              lat = 48.8566 + (Math.random() - 0.5) * 0.05
+            } else if (locationText.includes('东京') || locationText.includes('tokyo')) {
+              lng = 139.6917 + (Math.random() - 0.5) * 0.05
+              lat = 35.6895 + (Math.random() - 0.5) * 0.05
+            } else if (locationText.includes('纽约') || locationText.includes('new york')) {
+              lng = -74.0060 + (Math.random() - 0.5) * 0.05
+              lat = 40.7128 + (Math.random() - 0.5) * 0.05
+            }
+          }
+        }
+      }
+      
+      // 最终验证坐标
+      if (isNaN(lng) || isNaN(lat) || !isFinite(lng) || !isFinite(lat) ||
+          lng < -180 || lng > 180 || lat < -90 || lat > 90) {
+        console.warn('坐标验证失败，使用默认坐标:', { activity: activity.name, lng, lat })
+        lng = 120.1551 + (Math.random() - 0.5) * 0.05
+        lat = 30.2741 + (Math.random() - 0.5) * 0.05
+      }
+      
+      // 确保坐标是有效数字
+      const validLng = Number(lng)
+      const validLat = Number(lat)
+      
+      if (isNaN(validLng) || isNaN(validLat) || !isFinite(validLng) || !isFinite(validLat)) {
+        console.warn('坐标转换失败，跳过此活动:', { activity: activity.name, lng, lat })
+        continue // 跳过无效坐标的活动
+      }
+      
+      mapPoints.push({
+        lng: validLng,
+        lat: validLat,
+        name: activity.name || activity.title || '未知活动',
+        address,
+        activity,
+        index: index + 1
+      })
+    }
+    
+    return mapPoints
   }
 
   // 初始化地图
@@ -213,17 +337,56 @@ const ItineraryMapDisplay: React.FC<ItineraryMapDisplayProps> = ({
   }
 
   // 更新地图显示
-  const updateMapDisplay = () => {
+  const updateMapDisplay = async () => {
     const dayItinerary = getCurrentDayItinerary()
     if (!dayItinerary || !dayItinerary.activities) return
 
     clearMapElements()
     
-    const mapPoints = convertActivitiesToMapPoints(dayItinerary.activities)
-    if (mapPoints.length > 0) {
-      addMarkers(mapPoints)
-      drawRoute(mapPoints)
+    try {
+      const mapPoints = await convertActivitiesToMapPoints(dayItinerary.activities)
+      if (mapPoints.length > 0) {
+        // 更新地图中心点
+        const center = calculateMapCenter(mapPoints)
+        if (map) {
+          map.setCenter(center)
+          
+          // 根据点的数量调整缩放级别
+          if (mapPoints.length === 1) {
+            map.setZoom(15)
+          } else if (mapPoints.length <= 3) {
+            map.setZoom(13)
+          } else {
+            map.setZoom(12)
+          }
+        }
+        
+        addMarkers(mapPoints)
+        drawRoute(mapPoints)
+      }
+    } catch (error) {
+      console.error('更新地图显示失败:', error)
     }
+  }
+
+  // 计算地图中心点
+  const calculateMapCenter = (points: MapPoint[]): [number, number] => {
+    if (points.length === 0) return [120.1551, 30.2741]
+    
+    const validPoints = points.filter(point => {
+      const lng = Number(point.lng)
+      const lat = Number(point.lat)
+      return !isNaN(lng) && !isNaN(lat) && 
+             lng >= -180 && lng <= 180 && 
+             lat >= -90 && lat <= 90
+    })
+    
+    if (validPoints.length === 0) return [120.1551, 30.2741]
+    
+    const avgLng = validPoints.reduce((sum, point) => sum + Number(point.lng), 0) / validPoints.length
+    const avgLat = validPoints.reduce((sum, point) => sum + Number(point.lat), 0) / validPoints.length
+    
+    return [avgLng, avgLat]
   }
 
   // 处理日程切换

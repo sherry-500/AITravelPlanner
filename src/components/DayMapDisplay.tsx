@@ -1,6 +1,8 @@
 import React, { useEffect, useRef, useState } from 'react'
 import { Spin, Alert, Button } from 'antd'
 import type { DayItinerary, Activity } from '../types'
+import { geocodingService } from '../services/geocodingService'
+import { apiConfigService } from '../services/apiConfigService'
 
 interface DayMapDisplayProps {
   dayItinerary: DayItinerary | null
@@ -28,23 +30,26 @@ const DayMapDisplay: React.FC<DayMapDisplayProps> = ({
   const [polylines, setPolylines] = useState<any[]>([])
 
   // 将活动转换为地图点位
-  const convertActivitiesToMapPoints = (activities: Activity[]): MapPoint[] => {
-    return activities.map((activity, index) => {
-      // 处理 location 可能是字符串或对象的情况
-      let lng = 120.1551 + Math.random() * 0.01 // 默认杭州坐标
-      let lat = 30.2741 + Math.random() * 0.01
+  const convertActivitiesToMapPoints = async (activities: Activity[]): Promise<MapPoint[]> => {
+    const mapPoints: MapPoint[] = []
+    
+    for (let index = 0; index < activities.length; index++) {
+      const activity = activities[index]
+      let lng: number = 120.1551 // 默认杭州坐标
+      let lat: number = 30.2741
       let address = '地址待定'
       
       if (activity.location) {
         if (typeof activity.location === 'object') {
-          // 确保坐标是有效的数字
-          const locLng = parseFloat(String(activity.location.lng || 0))
-          const locLat = parseFloat(String(activity.location.lat || 0))
+          // 确保坐标是有效的数字，支持多种坐标字段名
+          const locLng = parseFloat(String(activity.location.lng || activity.location.longitude || 0))
+          const locLat = parseFloat(String(activity.location.lat || activity.location.latitude || 0))
           
           if (!isNaN(locLng) && !isNaN(locLat) && 
               isFinite(locLng) && isFinite(locLat) &&
               locLng >= -180 && locLng <= 180 &&
-              locLat >= -90 && locLat <= 90) {
+              locLat >= -90 && locLat <= 90 &&
+              locLng !== 0 && locLat !== 0) { // 排除 (0,0) 坐标
             lng = locLng
             lat = locLat
           }
@@ -55,22 +60,107 @@ const DayMapDisplay: React.FC<DayMapDisplayProps> = ({
         }
       }
       
-      // 最终验证坐标
-      if (isNaN(lng) || isNaN(lat) || !isFinite(lng) || !isFinite(lat)) {
-        console.warn('坐标验证失败，使用默认坐标:', { activity: activity.name, lng, lat })
-        lng = 120.1551 + Math.random() * 0.01
-        lat = 30.2741 + Math.random() * 0.01
+      // 如果没有有效坐标，尝试通过地理编码获取真实坐标
+      if (lng === 120.1551 && lat === 30.2741) {
+        const searchAddress = activity.location?.address || activity.location || activity.name || ''
+        
+        if (searchAddress && searchAddress !== '地址待定' && searchAddress.trim() !== '') {
+          try {
+            // 根据目的地确定城市参数
+            let city = ''
+            const locationText = searchAddress.toLowerCase()
+            
+            if (locationText.includes('伦敦') || locationText.includes('london')) {
+              city = 'London'
+            } else if (locationText.includes('巴黎') || locationText.includes('paris')) {
+              city = 'Paris'
+            } else if (locationText.includes('东京') || locationText.includes('tokyo')) {
+              city = 'Tokyo'
+            } else if (locationText.includes('纽约') || locationText.includes('new york')) {
+              city = 'New York'
+            } else if (locationText.includes('上海')) {
+              city = '上海'
+            } else if (locationText.includes('北京')) {
+              city = '北京'
+            }
+            
+            const geocodeResult = await geocodingService.getCoordinates(searchAddress, city)
+            
+            if (geocodeResult) {
+              lng = geocodeResult.lng
+              lat = geocodeResult.lat
+              address = geocodeResult.address
+              console.log(`获取到真实坐标: ${searchAddress} -> [${lng}, ${lat}]`)
+            } else {
+              // 地理编码失败，使用基于城市的默认坐标
+              if (locationText.includes('伦敦') || locationText.includes('london')) {
+                lng = -0.1276 + (Math.random() - 0.5) * 0.05
+                lat = 51.5074 + (Math.random() - 0.5) * 0.05
+              } else if (locationText.includes('巴黎') || locationText.includes('paris')) {
+                lng = 2.3522 + (Math.random() - 0.5) * 0.05
+                lat = 48.8566 + (Math.random() - 0.5) * 0.05
+              } else if (locationText.includes('东京') || locationText.includes('tokyo')) {
+                lng = 139.6917 + (Math.random() - 0.5) * 0.05
+                lat = 35.6895 + (Math.random() - 0.5) * 0.05
+              } else if (locationText.includes('纽约') || locationText.includes('new york')) {
+                lng = -74.0060 + (Math.random() - 0.5) * 0.05
+                lat = 40.7128 + (Math.random() - 0.5) * 0.05
+              } else {
+                // 保持默认杭州坐标，添加小的随机偏移
+                lng = 120.1551 + (Math.random() - 0.5) * 0.05
+                lat = 30.2741 + (Math.random() - 0.5) * 0.05
+              }
+              console.warn(`地理编码失败，使用默认坐标: ${searchAddress}`)
+            }
+          } catch (geocodeError) {
+            console.error(`地理编码服务调用失败: ${searchAddress}`, geocodeError)
+            // 使用基于城市的默认坐标
+            const locationText = searchAddress.toLowerCase()
+            if (locationText.includes('伦敦') || locationText.includes('london')) {
+              lng = -0.1276 + (Math.random() - 0.5) * 0.05
+              lat = 51.5074 + (Math.random() - 0.5) * 0.05
+            } else if (locationText.includes('巴黎') || locationText.includes('paris')) {
+              lng = 2.3522 + (Math.random() - 0.5) * 0.05
+              lat = 48.8566 + (Math.random() - 0.5) * 0.05
+            } else if (locationText.includes('东京') || locationText.includes('tokyo')) {
+              lng = 139.6917 + (Math.random() - 0.5) * 0.05
+              lat = 35.6895 + (Math.random() - 0.5) * 0.05
+            } else if (locationText.includes('纽约') || locationText.includes('new york')) {
+              lng = -74.0060 + (Math.random() - 0.5) * 0.05
+              lat = 40.7128 + (Math.random() - 0.5) * 0.05
+            }
+          }
+        }
       }
       
-      return {
-        lng,
-        lat,
+      // 最终验证坐标
+      if (isNaN(lng) || isNaN(lat) || !isFinite(lng) || !isFinite(lat) ||
+          lng < -180 || lng > 180 || lat < -90 || lat > 90) {
+        console.warn('坐标验证失败，使用默认坐标:', { activity: activity.name, lng, lat })
+        lng = 120.1551 + (Math.random() - 0.5) * 0.05
+        lat = 30.2741 + (Math.random() - 0.5) * 0.05
+      }
+      
+      // 确保坐标是有效数字
+      const validLng = Number(lng)
+      const validLat = Number(lat)
+      
+      if (isNaN(validLng) || isNaN(validLat) || !isFinite(validLng) || !isFinite(validLat)) {
+        console.warn('坐标转换失败，跳过此活动:', { activity: activity.name, lng, lat })
+        continue // 跳过无效坐标的活动
+      }
+      
+      mapPoints.push({
+        lng: validLng,
+        lat: validLat,
         name: activity.name || activity.title || '未知活动',
         address,
         activity,
         index: index + 1
-      }
-    })
+      })
+    }
+    
+    return mapPoints
   }
 
   // 初始化地图
@@ -83,23 +173,57 @@ const DayMapDisplay: React.FC<DayMapDisplayProps> = ({
         throw new Error('地图容器未找到')
       }
 
+      // 确保高德地图SDK已加载
+      const { AmapLoader } = await import('../utils/amapLoader')
+      await AmapLoader.load()
+
       if (!window.AMap) {
-        throw new Error('高德地图API未加载')
+        throw new Error('高德地图SDK加载失败')
+      }
+
+      // 使用默认中心点初始化地图
+      let initialCenter: [number, number] = [120.1551, 30.2741] // 默认杭州
+      let initialZoom = 13
+
+      // 如果有行程数据，尝试根据第一个活动的位置设置初始中心点
+      if (dayItinerary && dayItinerary.activities && dayItinerary.activities.length > 0) {
+        const firstActivity = dayItinerary.activities[0]
+        if (firstActivity.location) {
+          if (typeof firstActivity.location === 'object' && 
+              firstActivity.location.lng && firstActivity.location.lat) {
+            const lng = Number(firstActivity.location.lng)
+            const lat = Number(firstActivity.location.lat)
+            if (!isNaN(lng) && !isNaN(lat) && 
+                lng >= -180 && lng <= 180 && lat >= -90 && lat <= 90) {
+              initialCenter = [lng, lat]
+              initialZoom = 13
+            }
+          } else {
+            // 根据地址关键词设置大概位置
+            const locationText = (firstActivity.location || '').toLowerCase()
+            if (locationText.includes('伦敦') || locationText.includes('london')) {
+              initialCenter = [-0.1276, 51.5074]
+            } else if (locationText.includes('巴黎') || locationText.includes('paris')) {
+              initialCenter = [2.3522, 48.8566]
+            } else if (locationText.includes('东京') || locationText.includes('tokyo')) {
+              initialCenter = [139.6917, 35.6895]
+            } else if (locationText.includes('纽约') || locationText.includes('new york')) {
+              initialCenter = [-74.0060, 40.7128]
+            }
+          }
+        }
       }
 
       // 创建地图实例
       const mapInstance = new window.AMap.Map(mapRef.current, {
-        zoom: 13,
-        center: [120.1551, 30.2741], // 默认杭州
+        zoom: initialZoom,
+        center: initialCenter,
         mapStyle: 'amap://styles/light',
         viewMode: '2D',
         features: ['bg', 'road', 'building', 'point'],
         showLabel: true,
         resizeEnable: true
       })
-
-      // 不添加控件，避免错误
-      // 控件在高德地图 2.0 版本中可能不可用
 
       setMap(mapInstance)
       setMapLoading(false)
@@ -281,7 +405,7 @@ const DayMapDisplay: React.FC<DayMapDisplayProps> = ({
   }
 
   // 更新地图显示
-  const updateMapDisplay = () => {
+  const updateMapDisplay = async () => {
     if (!dayItinerary || !dayItinerary.activities) {
       clearMapElements()
       return
@@ -289,11 +413,50 @@ const DayMapDisplay: React.FC<DayMapDisplayProps> = ({
 
     clearMapElements()
     
-    const mapPoints = convertActivitiesToMapPoints(dayItinerary.activities)
-    if (mapPoints.length > 0) {
-      addMarkers(mapPoints)
-      drawRoute(mapPoints)
+    try {
+      const mapPoints = await convertActivitiesToMapPoints(dayItinerary.activities)
+      if (mapPoints.length > 0) {
+        // 更新地图中心点
+        const center = calculateMapCenter(mapPoints)
+        if (map) {
+          map.setCenter(center)
+          
+          // 根据点的数量调整缩放级别
+          if (mapPoints.length === 1) {
+            map.setZoom(15)
+          } else if (mapPoints.length <= 3) {
+            map.setZoom(13)
+          } else {
+            map.setZoom(12)
+          }
+        }
+        
+        addMarkers(mapPoints)
+        drawRoute(mapPoints)
+      }
+    } catch (error) {
+      console.error('更新地图显示失败:', error)
     }
+  }
+
+  // 计算地图中心点
+  const calculateMapCenter = (points: MapPoint[]): [number, number] => {
+    if (points.length === 0) return [120.1551, 30.2741]
+    
+    const validPoints = points.filter(point => {
+      const lng = Number(point.lng)
+      const lat = Number(point.lat)
+      return !isNaN(lng) && !isNaN(lat) && 
+             lng >= -180 && lng <= 180 && 
+             lat >= -90 && lat <= 90
+    })
+    
+    if (validPoints.length === 0) return [120.1551, 30.2741]
+    
+    const avgLng = validPoints.reduce((sum, point) => sum + Number(point.lng), 0) / validPoints.length
+    const avgLat = validPoints.reduce((sum, point) => sum + Number(point.lat), 0) / validPoints.length
+    
+    return [avgLng, avgLat]
   }
 
   // 初始化地图
