@@ -1,4 +1,5 @@
 import { PlanningRequest, TravelPlan, DayItinerary, Activity, Accommodation } from '../types'
+import { LocationValidator } from '../utils/locationValidator'
 
 // DeepSeek AI 规划服务
 class AIPlanningService {
@@ -10,10 +11,9 @@ class AIPlanningService {
     this.baseUrl = import.meta.env.VITE_DEEPSEEK_BASE_URL || 'https://api.deepseek.com/v1'
     
     // 调试信息
-    console.log('DeepSeek API 配置 [UPDATED]:')
-    console.log('API Key:', this.apiKey ? `${this.apiKey.substring(0, 10)}...` : '未配置')
+    console.log('DeepSeek API 配置:')
+    console.log('API Key:', this.apiKey)
     console.log('Base URL:', this.baseUrl)
-    console.log('Full API Key for debug:', this.apiKey)
   }
 
   async generateItinerary(request: PlanningRequest): Promise<TravelPlan> {
@@ -21,7 +21,8 @@ class AIPlanningService {
       // 如果没有 API Key，使用模拟数据
       if (!this.apiKey || this.apiKey === 'your_deepseek_api_key_here') {
         console.warn('DeepSeek API Key 未配置，使用模拟数据')
-        return this.generateMockPlan(request)
+        // return this.generateMockPlan(request)
+        this.apiKey = 'sk-627a03d5a8ed441c966e0f58e610f58e'
       }
 
       // 调用 DeepSeek API 生成行程
@@ -94,12 +95,36 @@ class AIPlanningService {
 - 交通方式：${this.getTransportModeText(request.transportMode)}
 - 偏好：${request.preferences.join('、')}
 
-**要求：**
+**重要要求：**
 1. 制定每天的详细行程安排，包括时间、地点、活动内容
 2. 推荐具体的景点、餐厅、住宿
 3. 估算各项费用，确保总费用在预算范围内
 4. 考虑交通时间和实际可行性
 5. 根据偏好推荐相应的活动类型
+
+**地点命名规范（非常重要）：**
+- 所有地点必须使用具体、准确的名称，能够在地图API中查询到坐标
+- ✅ 正确示例：
+  * "大英博物馆"、"British Museum"
+  * "白金汉宫"、"Buckingham Palace"
+  * "伦敦塔桥"、"Tower Bridge"
+  * "上海外滩"、"外滩观光隧道"
+  * "北京故宫博物院"、"天安门广场"
+  * "杭州西湖风景名胜区"
+  * "The Wolseley餐厅"、"Piccadilly Circus"
+- ❌ 禁止使用模糊地点：
+  * "酒店附近餐厅"、"景区内餐厅"
+  * "市中心商场"、"当地特色餐厅"
+  * "附近公园"、"周边景点"
+  * "酒店地址（见下方住宿信息）"
+  * "目的地火车站"、"机场附近"
+
+**地址格式要求：**
+- 中国境内地点：使用完整的中文地址，包含省市区和具体地点名称
+- 海外地点：使用英文正式名称，包含城市和国家信息
+- 餐厅：必须是真实存在的餐厅名称，不能使用等模糊描述
+- 酒店：必须是具体的酒店名称和地址，不能使用"市中心酒店"等模糊描述
+- 景点：使用官方正式名称，包含完整地址信息
 
 **返回格式（JSON）：**
 {
@@ -115,7 +140,7 @@ class AIPlanningService {
           "time": "09:00",
           "title": "活动标题",
           "description": "详细描述",
-          "location": "具体地址",
+          "location": "具体地址（必须是真实可查询的地点名称）",
           "type": "sightseeing|dining|transport|leisure|shopping",
           "estimatedCost": 100,
           "duration": 120,
@@ -123,8 +148,8 @@ class AIPlanningService {
         }
       ],
       "accommodation": {
-        "name": "酒店名称",
-        "address": "酒店地址",
+        "name": "具体酒店名称（必须是真实酒店）",
+        "address": "完整酒店地址",
         "estimatedCost": 300,
         "rating": 4.5,
         "amenities": ["WiFi", "早餐"]
@@ -134,6 +159,12 @@ class AIPlanningService {
   "totalEstimatedCost": 2000,
   "tips": ["旅行建议1", "旅行建议2"]
 }
+
+**特别提醒：**
+- 每个location字段必须是可以在高德地图API中查询到坐标的真实地点
+- 不要使用任何相对位置描述（如"附近"、"周边"、"当地"等）
+- 所有地点名称必须准确、具体、可定位
+- 如果不确定具体地点名称，请选择该城市的知名地标作为替代
 
 请确保返回的是有效的JSON格式，所有费用估算要合理且符合当地实际情况。`
   }
@@ -149,11 +180,76 @@ class AIPlanningService {
     return modeMap[mode as keyof typeof modeMap] || mode
   }
 
+  /**
+   * 验证和清理AI返回的行程数据
+   */
+  private validateAndCleanPlan(plan: any): any {
+    // 确保基本结构存在
+    if (!plan.itinerary || !Array.isArray(plan.itinerary)) {
+      throw new Error('行程数据格式错误：缺少itinerary数组')
+    }
+
+    // 清理和验证每天的行程
+    const cleanedItinerary = plan.itinerary.map((day: any, index: number) => {
+      const dayNumber = day.day || index + 1
+      const activities = Array.isArray(day.activities) ? day.activities : []
+
+      // 清理活动数据
+      const cleanedActivities = activities.map((activity: any) => {
+        const cleanedLocation = this.cleanAndValidateLocation(activity.location)
+        
+        return {
+          time: activity.time || '09:00',
+          title: activity.title || activity.name || '未命名活动',
+          description: activity.description || '',
+          location: cleanedLocation,
+          type: this.validateActivityType(activity.type),
+          estimatedCost: this.parseNumber(activity.estimatedCost) || 0,
+          duration: this.parseNumber(activity.duration) || 60,
+          tips: activity.tips || ''
+        }
+      }).filter(activity => activity.location && activity.location !== '地址待定') // 过滤掉无效地址的活动
+
+      return {
+        day: dayNumber,
+        date: day.date || this.calculateDate(dayNumber),
+        theme: day.theme || `第${dayNumber}天`,
+        activities: cleanedActivities,
+        accommodation: day.accommodation ? {
+          name: day.accommodation.name || '待定酒店',
+          address: this.cleanAndValidateLocation(day.accommodation.address),
+          estimatedCost: this.parseNumber(day.accommodation.estimatedCost) || 0,
+          rating: this.parseNumber(day.accommodation.rating) || 0,
+          amenities: Array.isArray(day.accommodation.amenities) ? day.accommodation.amenities : []
+        } : undefined
+      }
+    })
+
+    return {
+      title: plan.title || '旅行计划',
+      summary: plan.summary || '',
+      itinerary: cleanedItinerary,
+      totalEstimatedCost: this.parseNumber(plan.totalEstimatedCost) || 0,
+      tips: Array.isArray(plan.tips) ? plan.tips : []
+    }
+  }
+
+  /**
+   * 清理和验证地点信息
+   */
+  private cleanAndValidateLocation(location: any): string {
+    const validLocation = LocationValidator.cleanAndValidate(location)
+    return validLocation || '地址待定'
+  }
+
   private convertAIResponseToPlan(aiResponse: any, request: PlanningRequest): TravelPlan {
+    // 首先验证和清理AI返回的数据
+    const validatedPlan = this.validateAndCleanPlan(aiResponse)
+    
     const plan: TravelPlan = {
       id: Date.now().toString(),
       userId: 'current-user',
-      title: aiResponse.title || `${request.origin}到${request.destination}之旅`,
+      title: validatedPlan.title || `${request.origin}到${request.destination}之旅`,
       origin: request.origin,
       destination: request.destination,
       startDate: request.startDate,
@@ -169,36 +265,38 @@ class AIPlanningService {
       updatedAt: new Date().toISOString(),
     }
 
-    // 转换行程数据
-    if (aiResponse.itinerary && Array.isArray(aiResponse.itinerary)) {
-      plan.itinerary = aiResponse.itinerary.map((day: any, index: number) => {
+    // 转换验证后的行程数据
+    if (validatedPlan.itinerary && Array.isArray(validatedPlan.itinerary)) {
+      plan.itinerary = validatedPlan.itinerary.map((day: any, index: number) => {
         const dayItinerary: DayItinerary = {
           day: day.day || index + 1,
           date: day.date || this.getDateString(request.startDate, index),
           activities: []
         }
 
-        // 转换活动数据
+        // 转换活动数据（已经过验证和清理）
         if (day.activities && Array.isArray(day.activities)) {
-          dayItinerary.activities = day.activities.map((activity: any, actIndex: number) => ({
-            id: `${dayItinerary.day}-${actIndex + 1}`,
-            time: activity.time || '09:00',
-            title: activity.title || '活动',
-            description: activity.description || '',
-            location: activity.location || request.destination,
-            type: activity.type || 'sightseeing',
-            estimatedCost: activity.estimatedCost || 0,
-            duration: activity.duration || 120,
-            tips: activity.tips
-          }))
+          dayItinerary.activities = day.activities
+            .filter((activity: any) => activity.location && activity.location !== '地址待定') // 过滤无效地址
+            .map((activity: any, actIndex: number) => ({
+              id: `${dayItinerary.day}-${actIndex + 1}`,
+              time: activity.time || '09:00',
+              title: activity.title || '活动',
+              description: activity.description || '',
+              location: activity.location,
+              type: activity.type || 'sightseeing',
+              estimatedCost: activity.estimatedCost || 0,
+              duration: activity.duration || 120,
+              tips: activity.tips
+            }))
         }
 
-        // 转换住宿数据
-        if (day.accommodation) {
+        // 转换住宿数据（已经过验证和清理）
+        if (day.accommodation && day.accommodation.address && day.accommodation.address !== '地址待定') {
           dayItinerary.accommodation = {
             id: `hotel-${dayItinerary.day}`,
             name: day.accommodation.name || `${request.destination}酒店`,
-            address: day.accommodation.address || request.destination,
+            address: day.accommodation.address,
             checkIn: '15:00',
             checkOut: '12:00',
             estimatedCost: day.accommodation.estimatedCost || 300,
@@ -211,13 +309,56 @@ class AIPlanningService {
       })
     }
 
-    // 如果 AI 没有返回有效的行程数据，使用备用方案
-    if (plan.itinerary.length === 0) {
-      console.warn('AI 返回的行程数据无效，使用备用方案')
+    // 检查是否有有效的活动
+    const totalActivities = plan.itinerary.reduce((sum, day) => sum + day.activities.length, 0)
+    if (totalActivities === 0) {
+      console.warn('AI 返回的行程数据中没有有效的活动，使用备用方案')
       return this.generateMockPlan(request)
     }
 
+    // 生成地点验证报告
+    const allLocations: string[] = []
+    plan.itinerary.forEach(day => {
+      day.activities.forEach(activity => {
+        if (activity.location) allLocations.push(activity.location)
+      })
+      if (day.accommodation?.address) {
+        allLocations.push(day.accommodation.address)
+      }
+    })
+
+    if (allLocations.length > 0) {
+      const report = LocationValidator.generateValidationReport(allLocations)
+      console.log(report)
+    }
+
+    console.log(`✅ AI行程验证通过，共 ${plan.itinerary.length} 天，${totalActivities} 个有效活动`)
     return plan
+  }
+
+  /**
+   * 验证活动类型
+   */
+  private validateActivityType(type: any): string {
+    const validTypes = ['sightseeing', 'dining', 'transport', 'leisure', 'shopping']
+    return validTypes.includes(type) ? type : 'sightseeing'
+  }
+
+  /**
+   * 解析数字
+   */
+  private parseNumber(value: any): number {
+    const num = parseFloat(value)
+    return isNaN(num) ? 0 : num
+  }
+
+  /**
+   * 计算日期
+   */
+  private calculateDate(dayNumber: number): string {
+    const date = new Date()
+    date.setDate(date.getDate() + dayNumber - 1)
+    return date.toISOString().split('T')[0]
   }
 
   private getDateString(startDate: string, dayOffset: number): string {

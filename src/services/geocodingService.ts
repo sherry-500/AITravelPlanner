@@ -1,6 +1,6 @@
 // 地理编码服务 - 通过高德地图API获取真实坐标
 import { apiConfigService } from './apiConfigService'
-import { qpsManager } from '../utils/qpsManager'
+import { amapQpsManager } from '../utils/amapQpsManager'
 
 export interface GeocodeResult {
   lng: number
@@ -75,12 +75,12 @@ class GeocodingService {
 
     // 检查是否为海外地址，如果是则直接返回null（避免无效API调用）
     if (this.isOverseasAddress(cleanAddress)) {
-      console.log(`检测到海外地址，跳过API调用: ${address}`)
+      
       return null
     }
 
-    // 使用QPS管理器控制请求频率
-    const data: GeocodeResponse | null = await qpsManager.addRequest(async () => {
+    // 使用高德地图专用QPS管理器控制请求频率
+    const data: GeocodeResponse | null = await amapQpsManager.addRequest(async () => {
       try {
         const params = new URLSearchParams({
           key: apiConfigService.getWebServiceApiKey(),
@@ -135,23 +135,25 @@ class GeocodingService {
         // 缓存结果
         this.cache.set(cacheKey, result)
         
-        console.log(`地理编码成功: ${address} -> [${lng}, ${lat}]`)
+        
         return result
       } else {
-        console.warn(`地理编码失败: ${address}`)
-        console.warn(`状态: ${data.status}, 信息: ${data.info}, 错误码: ${data.infocode}`)
-        
-        // 详细错误分析
+        // 详细错误分析 - 只输出失败的调试信息
         if (data.infocode === '10009') {
           console.error('❌ API Key平台不匹配 - 请检查API Key配置')
           console.log('🔧 解决方案: 使用Web服务类型的API Key')
         } else if (data.infocode === '30001') {
-          console.log('ℹ️ 地址查询无结果，可能是海外地址或地址格式不正确')
+          // 30001错误通常是海外地址查询失败，不输出错误信息
         } else if (data.infocode === '10004' || data.info?.includes('CUQPS_HAS_EXCEEDED_THE_LIMIT')) {
           console.error('❌ QPS限制超出 - 请求过于频繁')
           this.explainErrorCode(data.infocode, data.info)
           // QPS限制时等待更长时间再重试
-          await this.delay(2000)
+          await this.delay(3000)
+        } else {
+          // 其他错误输出详细信息
+          console.warn(`地理编码失败: ${address}`)
+          console.warn(`状态: ${data.status}, 信息: ${data.info}, 错误码: ${data.infocode}`)
+          this.explainErrorCode(data.infocode, data.info)
         }
         
         return null
@@ -233,7 +235,7 @@ class GeocodingService {
     for (const [key, coords] of Object.entries(fallbackCoords)) {
       if (lowerAddress.includes(key.toLowerCase()) || 
           key.toLowerCase().includes(lowerAddress)) {
-        console.log(`使用备用坐标: ${address} -> ${key} -> [${coords.lng}, ${coords.lat}]`)
+        
         return coords
       }
     }
@@ -255,7 +257,7 @@ class GeocodingService {
     
     for (const [keyword, coords] of Object.entries(keywordMatches)) {
       if (lowerAddress.includes(keyword)) {
-        console.log(`关键词匹配备用坐标: ${address} -> ${keyword} -> [${coords.lng}, ${coords.lat}]`)
+        
         return coords
       }
     }
@@ -272,34 +274,21 @@ class GeocodingService {
   async batchGetCoordinates(addresses: string[], city?: string): Promise<(GeocodeResult | null)[]> {
     const results: (GeocodeResult | null)[] = []
     
-    // 控制并发数量，避免超出QPS限制
-    const batchSize = 3 // 每批处理3个请求
-    const delayBetweenBatches = 1000 // 批次间延迟1秒
-    const delayBetweenRequests = 250 // 请求间延迟250ms
+    console.log(`开始批量地理编码，共 ${addresses.length} 个地址`)
     
-    for (let i = 0; i < addresses.length; i += batchSize) {
-      const batch = addresses.slice(i, i + batchSize)
-      console.log(`处理第 ${Math.floor(i / batchSize) + 1} 批地址 (${batch.length} 个)`)
+    // 使用高德地图专用QPS管理器，自动控制每秒不超过3次请求
+    for (let i = 0; i < addresses.length; i++) {
+      const address = addresses[i]
+      const result = await this.getCoordinates(address, city)
+      results.push(result)
       
-      // 处理当前批次
-      for (let j = 0; j < batch.length; j++) {
-        const address = batch[j]
-        const result = await this.getCoordinates(address, city)
-        results.push(result)
-        
-        // 请求间延迟（除了批次内最后一个请求）
-        if (j < batch.length - 1) {
-          await this.delay(delayBetweenRequests)
-        }
-      }
-      
-      // 批次间延迟（除了最后一批）
-      if (i + batchSize < addresses.length) {
-        console.log(`等待 ${delayBetweenBatches}ms 后处理下一批...`)
-        await this.delay(delayBetweenBatches)
+      // 显示进度
+      if (addresses.length > 5) {
+        console.log(`地理编码进度: ${i + 1}/${addresses.length}`)
       }
     }
     
+    console.log(`批量地理编码完成，成功获取 ${results.filter(r => r !== null).length} 个坐标`)
     return results
   }
 
@@ -415,7 +404,7 @@ class GeocodingService {
   }
 
   /**
-   * 解释错误码
+   * 解释错误码（仅在诊断模式下输出详细信息）
    */
   private explainErrorCode(infocode: string, info: string): void {
     const errorExplanations: Record<string, string> = {
@@ -473,7 +462,7 @@ class GeocodingService {
       console.log('3. 实现请求队列 - 控制并发请求数量')
       console.log('4. 升级API套餐 - 获得更高的QPS限制')
       console.log('5. 使用缓存机制 - 避免重复查询相同地址')
-      console.log('6. 当前建议: 请求间隔至少250ms，批次间隔1秒')
+      console.log('6. 当前建议: 请求间隔至少400ms，确保每秒不超过3次请求')
     }
   }
 }
@@ -482,13 +471,14 @@ class GeocodingService {
 export const geocodingService = new GeocodingService()
 
 // 在开发环境下自动运行诊断（仅运行一次）
-if (typeof window !== 'undefined' && window.location.hostname === 'localhost') {
-  let hasRunDiagnosis = false
-  // 延迟执行诊断，避免影响应用启动
-  setTimeout(() => {
-    if (!hasRunDiagnosis) {
-      hasRunDiagnosis = true
-      geocodingService.diagnoseGeocoding().catch(console.error)
-    }
-  }, 3000)
-}
+// 注释掉自动诊断，减少控制台输出
+// if (typeof window !== 'undefined' && window.location.hostname === 'localhost') {
+//   let hasRunDiagnosis = false
+//   // 延迟执行诊断，避免影响应用启动
+//   setTimeout(() => {
+//     if (!hasRunDiagnosis) {
+//       hasRunDiagnosis = true
+//       geocodingService.diagnoseGeocoding().catch(console.error)
+//     }
+//   }, 3000)
+// }

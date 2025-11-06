@@ -3,8 +3,8 @@ export class QpsLimitManager {
   private requestQueue: Array<() => Promise<any>> = []
   private isProcessing = false
   private lastRequestTime = 0
-  private readonly minInterval = 300 // 最小请求间隔（毫秒）
-  private readonly maxConcurrent = 2 // 最大并发数
+  private readonly minInterval = 400 // 最小请求间隔（毫秒）- 调整为400ms确保每秒不超过3次
+  private readonly maxConcurrent = 1 // 最大并发数 - 调整为1避免并发冲突
   private activeRequests = 0
 
   /**
