@@ -1,12 +1,13 @@
-import React, { useState } from 'react'
-import { Card, Row, Col, Button, Space, Tag, Timeline, Descriptions, Image, Carousel } from 'antd'
+import React, { useState, useEffect, useRef, useCallback } from 'react'
+import { Card, Row, Col, Button, Space, Tag, Timeline, Descriptions, Image, Carousel, Tabs } from 'antd'
+import type { TabsProps } from 'antd'
 import { ArrowLeftOutlined, EditOutlined, DeleteOutlined, EnvironmentOutlined, ClockCircleOutlined, CarOutlined, EyeOutlined } from '@ant-design/icons'
 import { useParams, useNavigate } from 'react-router-dom'
 import styled from 'styled-components'
 import { motion } from 'framer-motion'
 import { usePlanningStore } from '../store/planningStore'
 import { Activity } from '../types'
-import RealMapDisplay from '../components/SimpleMapDisplay'
+import DayMapDisplay from '../components/DayMapDisplay'
 
 const Container = styled.div`
   min-height: 100vh;
@@ -269,8 +270,74 @@ const PlanDetail: React.FC = () => {
   const navigate = useNavigate()
   const { plans, deletePlan } = usePlanningStore()
   const [showMap, setShowMap] = useState(true)
+  const [selectedDay, setSelectedDay] = useState(1)
+  const [loading, setLoading] = useState(false)
+  const dayRefs = useRef<{ [key: number]: HTMLDivElement | null }>({})
+  const isScrolling = useRef(false)
 
   const plan = plans.find(p => p.id === id)
+
+  // 处理日期切换
+  const handleDayChange = (key: string) => {
+    const dayNumber = parseInt(key)
+    setSelectedDay(dayNumber)
+    
+    // 标记正在滚动，避免触发滚动监听
+    isScrolling.current = true
+    
+    // 滚动到对应的日期内容（在容器内滚动）
+    const element = dayRefs.current[dayNumber]
+    const container = document.querySelector('.itinerary-content')
+    
+    if (element && container) {
+      const containerRect = container.getBoundingClientRect()
+      const elementRect = element.getBoundingClientRect()
+      const scrollTop = container.scrollTop
+      
+      // 计算目标滚动位置
+      const targetScrollTop = scrollTop + elementRect.top - containerRect.top - 20
+      
+      container.scrollTo({
+        top: targetScrollTop,
+        behavior: 'smooth'
+      })
+      
+      // 滚动完成后重置标记
+      setTimeout(() => {
+        isScrolling.current = false
+      }, 1000)
+    }
+  }
+
+  // 处理内容区域滚动
+  const handleContentScroll = useCallback((e: React.UIEvent<HTMLDivElement>) => {
+    if (isScrolling.current || !plan?.itinerary) return
+
+    const container = e.currentTarget
+    const containerRect = container.getBoundingClientRect()
+    const containerCenter = containerRect.top + containerRect.height / 2
+
+    let closestDay = 1
+    let minDistance = Infinity
+
+    plan.itinerary.forEach((day) => {
+      const element = dayRefs.current[day.day]
+      if (element) {
+        const elementRect = element.getBoundingClientRect()
+        const elementCenter = elementRect.top + elementRect.height / 2
+        const distance = Math.abs(elementCenter - containerCenter)
+
+        if (distance < minDistance) {
+          minDistance = distance
+          closestDay = day.day
+        }
+      }
+    })
+
+    if (closestDay !== selectedDay) {
+      setSelectedDay(closestDay)
+    }
+  }, [selectedDay, plan?.itinerary])
 
   console.log('Current plans:', plans)
   console.log('Looking for plan ID:', id)
@@ -410,12 +477,57 @@ const PlanDetail: React.FC = () => {
 
             {/* 详细行程 */}
             <StyledCard title="📅 详细行程">
-              {plan.itinerary.map((day) => (
-                <DayCard 
-                  key={day.day}
-                  title={`第 ${day.day} 天 - ${day.date}`}
-                  size="small"
-                >
+              {/* 固定的 Tab 导航 */}
+              <Tabs 
+                activeKey={selectedDay.toString()}
+                onChange={handleDayChange}
+                style={{ 
+                  marginTop: 16,
+                  position: 'sticky',
+                  top: 0,
+                  backgroundColor: 'white',
+                  zIndex: 10,
+                  borderBottom: '1px solid #f0f0f0',
+                  paddingBottom: 8
+                }}
+                animated={{ inkBar: true, tabPane: false }}
+                items={plan.itinerary.map((day) => ({
+                  key: day.day.toString(),
+                  label: `第 ${day.day} 天`,
+                  children: null
+                }))}
+              />
+              
+              {/* 可滚动的详细行程内容 */}
+              <div 
+                className="itinerary-content"
+                style={{ 
+                  height: '600px',
+                  overflowY: 'auto',
+                  marginTop: 16,
+                  padding: '0 8px',
+                  scrollBehavior: 'smooth'
+                }}
+                onScroll={handleContentScroll}
+              >
+                {plan.itinerary.map((day) => (
+                  <div 
+                    key={day.day}
+                    ref={(el) => { dayRefs.current[day.day] = el }}
+                    id={`day-${day.day}`}
+                    style={{
+                      marginBottom: 32,
+                      padding: '24px 16px',
+                      borderBottom: day.day < plan.itinerary.length ? '1px solid #f0f0f0' : 'none',
+                      borderRadius: 8,
+                      backgroundColor: selectedDay === day.day ? '#f6ffed' : 'transparent',
+                      transition: 'background-color 0.3s ease'
+                    }}
+                  >
+                    <DayCard 
+                      title={`第 ${day.day} 天 - ${day.date}`}
+                      size="small"
+                    >
                   {day.activities.map((activity, index) => (
                     <ActivityItem
                       key={activity.id}
@@ -521,14 +633,24 @@ const PlanDetail: React.FC = () => {
                     </ActivityItem>
                   )}
                 </DayCard>
-              ))}
+                  </div>
+                ))}
+              </div>
             </StyledCard>
           </Col>
 
           {showMap && (
             <Col xs={24} lg={10}>
               <MapCard>
-                <RealMapDisplay plan={plan} />
+                <div style={{ 
+                  height: '600px',
+                  transition: 'all 0.3s ease-in-out'
+                }}>
+                  <DayMapDisplay 
+                    dayItinerary={plan.itinerary?.find(day => day.day === selectedDay) || null}
+                    loading={loading}
+                  />
+                </div>
               </MapCard>
             </Col>
           )}

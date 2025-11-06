@@ -54,6 +54,7 @@ export interface Activity {
   name?: string
   time?: string
   startTime?: string
+  endTime?: string
   type: 'sightseeing' | 'dining' | 'shopping' | 'entertainment' | 'leisure' | 'accommodation' | 'transport'
   location: string | Location
   duration: number
@@ -73,8 +74,10 @@ export interface Accommodation {
   checkIn: string
   checkOut: string
   estimatedCost: number
+  cost?: number
   rating: number
   amenities: string[]
+  location?: Location
 }
 
 // 交通
