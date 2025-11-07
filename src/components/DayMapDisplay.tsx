@@ -22,6 +22,24 @@ const DayMapDisplay: React.FC<DayMapDisplayProps> = ({
   dayItinerary,
   loading = false
 }) => {
+  console.log('DayMapDisplay 组件接收到的行程数据:', dayItinerary)
+  console.log('当前天数:', dayItinerary?.day)
+  console.log('活动数量:', dayItinerary?.activities?.length)
+  console.log('住宿信息:', dayItinerary?.accommodation)
+  
+  // 详细检查每个活动
+  if (dayItinerary?.activities) {
+    dayItinerary.activities.forEach((activity, index) => {
+      console.log(`活动 ${index + 1}:`, {
+        id: activity.id,
+        title: activity.title || activity.name,
+        type: activity.type,
+        location: activity.location,
+        time: activity.time || activity.startTime
+      })
+    })
+  }
+  
   const mapRef = useRef<HTMLDivElement>(null)
   const [map, setMap] = useState<any>(null)
   const [mapLoading, setMapLoading] = useState(true)
@@ -31,10 +49,20 @@ const DayMapDisplay: React.FC<DayMapDisplayProps> = ({
 
   // 将活动转换为地图点位
   const convertActivitiesToMapPoints = async (activities: Activity[]): Promise<MapPoint[]> => {
+    console.log('开始转换活动为地图点位，活动数量:', activities.length)
     const mapPoints: MapPoint[] = []
     
-    for (let index = 0; index < activities.length; index++) {
-      const activity = activities[index]
+    // 过滤掉交通类型的活动，只显示景点、餐饮、购物等活动
+    const filteredActivities = activities.filter(activity => activity.type !== 'transport')
+    console.log('过滤后的活动数量:', filteredActivities.length, '原始数量:', activities.length)
+    
+    for (let index = 0; index < filteredActivities.length; index++) {
+      const activity = filteredActivities[index]
+      console.log(`处理活动 ${index + 1}:`, {
+        id: activity.id,
+        name: activity.name,
+        location: activity.location
+      })
       let lng: number = 120.1551 // 默认杭州坐标
       let lat: number = 30.2741
       let address = '地址待定'
@@ -63,6 +91,7 @@ const DayMapDisplay: React.FC<DayMapDisplayProps> = ({
       // 如果没有有效坐标，尝试通过地理编码获取真实坐标
       if (lng === 120.1551 && lat === 30.2741) {
         const searchAddress = activity.location?.address || activity.location || activity.name || ''
+        console.log(`活动 ${index + 1} 需要地理编码:`, searchAddress)
         
         if (searchAddress && searchAddress !== '地址待定' && searchAddress.trim() !== '') {
           try {
@@ -150,14 +179,16 @@ const DayMapDisplay: React.FC<DayMapDisplayProps> = ({
         continue // 跳过无效坐标的活动
       }
       
-      mapPoints.push({
+      const mapPoint = {
         lng: validLng,
         lat: validLat,
         name: activity.name || activity.title || '未知活动',
         address,
         activity,
         index: index + 1
-      })
+      }
+      console.log(`活动 ${index + 1} 转换成功:`, mapPoint)
+      mapPoints.push(mapPoint)
     }
     
     return mapPoints
@@ -261,14 +292,36 @@ const DayMapDisplay: React.FC<DayMapDisplayProps> = ({
 
   // 添加景点标记
   const addMarkers = (points: MapPoint[]) => {
+    console.log('addMarkers 函数被调用，点数量:', points.length)
+    console.log('传入的点数据:', points.map(p => ({ name: p.name, lng: p.lng, lat: p.lat, index: p.index })))
     if (!map || !window.AMap || points.length === 0) return
 
     const newMarkers: any[] = []
 
     points.forEach((point, index) => {
+      console.log(`处理标记 ${index + 1}:`, { name: point.name, lng: point.lng, lat: point.lat, index: point.index })
+      
+      // 检查是否有重叠的标记，如果有则稍微偏移
+      let markerLng = point.lng
+      let markerLat = point.lat
+      const overlapThreshold = 0.0001 // 坐标重叠阈值
+      
+      for (let i = 0; i < newMarkers.length; i++) {
+        const existingMarker = newMarkers[i]
+        const existingPoint = points[i]
+        if (Math.abs(point.lng - existingPoint.lng) < overlapThreshold && 
+            Math.abs(point.lat - existingPoint.lat) < overlapThreshold) {
+          // 如果坐标重叠，稍微偏移新标记的位置
+          markerLng = point.lng + (Math.random() - 0.5) * 0.0002
+          markerLat = point.lat + (Math.random() - 0.5) * 0.0002
+          console.log(`标记 ${index + 1} 与标记 ${i + 1} 重叠，偏移坐标: [${markerLng}, ${markerLat}]`)
+          break
+        }
+      }
+      
       // 更严格的坐标验证
-      const lng = parseFloat(String(point.lng))
-      const lat = parseFloat(String(point.lat))
+      const lng = parseFloat(String(markerLng))
+      const lat = parseFloat(String(markerLat))
       
       if (!point.lng || !point.lat || 
           isNaN(lng) || isNaN(lat) || 
@@ -524,12 +577,27 @@ const DayMapDisplay: React.FC<DayMapDisplayProps> = ({
             console.log('地图中心点设置成功:', center)
             
             // 根据点的数量调整缩放级别
+            let zoomLevel
             if (mapPoints.length === 1) {
-              map.setZoom(15)
+              zoomLevel = 15
             } else if (mapPoints.length <= 3) {
-              map.setZoom(13)
+              zoomLevel = 13
+            } else if (mapPoints.length <= 5) {
+              zoomLevel = 12.5 // 为4-5个点使用稍高的缩放
             } else {
-              map.setZoom(12)
+              zoomLevel = 12
+            }
+            
+            console.log('设置地图缩放级别:', zoomLevel, '点数量:', mapPoints.length)
+            map.setZoom(zoomLevel)
+            
+            // 添加额外的缩放调整，确保所有标记都可见
+            if (mapPoints.length >= 4) {
+              // 对于4个或更多点，稍微放大一点以确保标记不重叠
+              setTimeout(() => {
+                map.setZoom(zoomLevel + 0.5)
+                console.log('额外放大地图以避免标记重叠')
+              }, 100)
             }
           } catch (setCenterError) {
             console.error('设置地图中心点失败:', setCenterError)

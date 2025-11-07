@@ -274,8 +274,14 @@ const PlanDetail: React.FC = () => {
   const [loading, setLoading] = useState(false)
   const dayRefs = useRef<{ [key: number]: HTMLDivElement | null }>({})
   const isScrolling = useRef(false)
-
+  
   const plan = plans.find(p => p.id === id)
+  
+  // 添加调试信息
+  const currentDayItinerary = plan?.itinerary?.find(day => day.day === selectedDay)
+  console.log('当前选中的天数:', selectedDay)
+  console.log('当前天的行程:', currentDayItinerary)
+  console.log('当前天的活动数量:', currentDayItinerary?.activities.length)
 
   // 处理日期切换
   const handleDayChange = (key: string) => {
@@ -437,10 +443,7 @@ const PlanDetail: React.FC = () => {
             {/* 行程概览 */}
             <StyledCard title="📋 行程概览">
           <Descriptions column={2} bordered>
-            {plan.origin && (
-              <Descriptions.Item label="出发地">{plan.origin}</Descriptions.Item>
-            )}
-            <Descriptions.Item label="目的地">{plan.destination}</Descriptions.Item>
+              <Descriptions.Item label="目的地">{plan.destination}</Descriptions.Item>
             {plan.transportMode && (
               <Descriptions.Item label="出行方式">
                 <Tag color={getTransportModeColor(plan.transportMode)}>
@@ -647,7 +650,7 @@ const PlanDetail: React.FC = () => {
                   transition: 'all 0.3s ease-in-out'
                 }}>
                   <DayMapDisplay 
-                    dayItinerary={plan.itinerary?.find(day => day.day === selectedDay) || null}
+                    dayItinerary={currentDayItinerary || null}
                     loading={loading}
                   />
                 </div>
