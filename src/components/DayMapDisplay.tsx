@@ -3,6 +3,7 @@ import { Spin, Alert, Button } from 'antd'
 import type { DayItinerary, Activity } from '../types'
 import { geocodingService } from '../services/geocodingService'
 import { apiConfigService } from '../services/apiConfigService'
+import { qpsManager } from '../utils/qpsManager'
 
 interface DayMapDisplayProps {
   dayItinerary: DayItinerary | null
@@ -441,7 +442,7 @@ const DayMapDisplay: React.FC<DayMapDisplayProps> = ({
       if (window.AMap && typeof window.AMap.Walking === 'function') {
         console.log('✅ Walking插件可用，开始逐段步行路线规划')
         
-        // 逐段进行路线规划
+        // 逐段进行路线规划（使用QPS管理）
         const planRoutes = async () => {
           for (let i = 0; i < validPoints.length - 1; i++) {
             try {
@@ -450,20 +451,23 @@ const DayMapDisplay: React.FC<DayMapDisplayProps> = ({
               
               console.log(`🚶 规划第 ${i + 1} 段路线，起点:`, start, '终点:', end)
               
-              const walking = new window.AMap.Walking({
-                map: map,
-                panel: 'panel',
-                hideMarkers: true,
-                showTraffic: false
-              })
-              
-              const routeResult = await new Promise((resolve, reject) => {
-                walking.search(start, end, (status: string, result: any) => {
-                  if (status === 'complete' && result.routes && result.routes.length > 0) {
-                    resolve(result.routes[0])
-                  } else {
-                    reject(result)
-                  }
+              // 使用QPS管理器包装步行路线规划请求
+              const routeResult = await qpsManager.addRequest(async () => {
+                return new Promise((resolve, reject) => {
+                  const walking = new window.AMap.Walking({
+                    map: map,
+                    panel: 'panel',
+                    hideMarkers: true,
+                    showTraffic: false
+                  })
+                  
+                  walking.search(start, end, (status: string, result: any) => {
+                    if (status === 'complete' && result.routes && result.routes.length > 0) {
+                      resolve(result.routes[0])
+                    } else {
+                      reject(result)
+                    }
+                  })
                 })
               })
               

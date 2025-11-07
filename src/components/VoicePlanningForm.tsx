@@ -5,6 +5,7 @@ import { useSpeechSynthesis, useSpeechRecognition } from '../hooks/useSpeech'
 import { motion } from 'framer-motion'
 import styled from 'styled-components'
 import { PlanningRequest } from '../types'
+import { voiceRecognitionService } from '../services/voiceRecognitionService'
 import dayjs from 'dayjs'
 
 const { RangePicker } = DatePicker
@@ -59,10 +60,44 @@ const VoicePlanningForm: React.FC<VoicePlanningFormProps> = ({ onSubmit, onCance
   
   const { speak } = useSpeechSynthesis()
   const { listen, listening, stop } = useSpeechRecognition({
-    onResult: (result: string) => {
+    onResult: async (result: string) => {
       setVoiceInput(result)
-      parseVoiceInput(result)
-      message.success('语音识别完成')
+      
+      // 使用大模型智能解析语音内容
+      try {
+        const parsedData = await voiceRecognitionService.parseVoiceInputWithAI(result)
+        console.log('AI解析结果:', parsedData)
+        
+        // 填充表单
+        if (parsedData.origin) {
+          form.setFieldValue('origin', parsedData.origin)
+        }
+        if (parsedData.destination) {
+          form.setFieldValue('destination', parsedData.destination)
+        }
+        if (parsedData.transportMode) {
+          form.setFieldValue('transportMode', parsedData.transportMode)
+        }
+        if (parsedData.budget) {
+          form.setFieldValue('budget', parsedData.budget)
+        }
+        if (parsedData.travelers) {
+          form.setFieldValue('travelers', parsedData.travelers)
+        }
+        if (parsedData.preferences && Array.isArray(parsedData.preferences)) {
+          setSelectedPreferences(parsedData.preferences)
+        }
+        if (parsedData.additionalRequirements) {
+          form.setFieldValue('additionalRequirements', parsedData.additionalRequirements)
+        }
+        
+        message.success('语音识别并智能解析完成！')
+      } catch (error) {
+        console.error('语音解析失败:', error)
+        message.error('语音解析失败，已使用基础识别结果')
+        // 降级到基础解析
+        parseVoiceInput(result)
+      }
     },
     onError: (error: any) => {
       message.error('语音识别失败，请重试')
@@ -143,7 +178,7 @@ const VoicePlanningForm: React.FC<VoicePlanningFormProps> = ({ onSubmit, onCance
       stop()
     } else {
       listen()
-      speak({ text: '请说出您的旅行需求' })
+      speak({ text: '请说出您的旅行需求，我将使用AI智能分析您的旅行计划' })
     }
   }
 

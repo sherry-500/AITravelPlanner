@@ -1,499 +1,581 @@
-import React, { useEffect, useRef, useState } from 'react'
-import { Card, Button, Space, Select, message, Spin } from 'antd'
-import { EnvironmentOutlined, CarOutlined, SwapOutlined } from '@ant-design/icons'
+import React, { useEffect, useRef, useState, useCallback } from 'react'
 import styled from 'styled-components'
+import { Button, Select, message } from 'antd'
+import { EnvironmentOutlined } from '@ant-design/icons'
 import { TravelPlan } from '../types'
+import { useAuthStore } from '../store/authStore'
+import { useAmapLoader } from '../utils/useAmapLoader'
+
+const { Option } = Select
+
+interface MapDisplayProps {
+  planId?: string
+  locations?: any[]
+  onLocationsChange?: (locations: any[]) => void
+}
+
+const StyledMapContainer = styled.div`
+  position: relative;
+  width: 100%;
+  height: 600px;
+  border-radius: 8px;
+  overflow: hidden;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+`
 
 const MapContainer = styled.div`
   width: 100%;
-  height: 500px;
-  border-radius: 12px;
-  overflow: hidden;
-  position: relative;
+  height: 100%;
+  z-index: 1;
 `
 
-const MapControls = styled.div`
+const ControlPanel = styled.div`
   position: absolute;
   top: 16px;
   right: 16px;
-  z-index: 1000;
-  background: rgba(255, 255, 255, 0.95);
-  backdrop-filter: blur(10px);
-  border-radius: 8px;
+  z-index: 10;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  background: white;
   padding: 12px;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+  border-radius: 8px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
 `
 
-const RouteInfo = styled.div`
+const RouteTypeSelector = styled.div`
+  margin-bottom: 8px;
+`
+
+const ButtonGroup = styled.div`
+  display: flex;
+  gap: 8px;
+  flex-direction: column;
+`
+
+const RouteInfoPanel = styled.div`
   position: absolute;
   bottom: 16px;
   left: 16px;
-  right: 16px;
-  z-index: 1000;
-  background: rgba(255, 255, 255, 0.95);
-  backdrop-filter: blur(10px);
-  border-radius: 8px;
+  background: white;
   padding: 16px;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+  border-radius: 8px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  max-width: 300px;
+  z-index: 10;
 `
 
-const LoadingOverlay = styled.div`
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background: rgba(255, 255, 255, 0.8);
+const RouteInfoHeader = styled.div`
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
+  
+  h4 {
+    margin: 0;
+    color: #1890ff;
+  }
+`
+
+const CloseButton = styled.button`
+  background: none;
+  border: none;
+  font-size: 16px;
+  cursor: pointer;
+  color: #999;
+  padding: 0;
+  width: 20px;
+  height: 20px;
   display: flex;
   align-items: center;
   justify-content: center;
-  z-index: 2000;
+  
+  &:hover {
+    color: #666;
+  }
 `
 
-interface MapDisplayProps {
-  plan: TravelPlan
-}
-
-declare global {
-  interface Window {
-    AMap: any
+const RouteDetails = styled.div`
+  font-size: 14px;
+  
+  p {
+    margin: 8px 0;
+    color: #333;
   }
-}
+  
+  strong {
+    color: #1890ff;
+  }
+`
 
-const MapDisplay: React.FC<MapDisplayProps> = ({ plan }) => {
+const StyledSpin = styled.div`
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  z-index: 5;
+  background: white;
+  padding: 20px;
+  border-radius: 8px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+`
+
+const MapDisplay: React.FC<MapDisplayProps> = ({ planId, locations = [], onLocationsChange }) => {
   const mapRef = useRef<HTMLDivElement>(null)
-  const [map, setMap] = useState<any>(null)
+  const mapInstanceRef = useRef<any>(null)
+  const markersRef = useRef<any[]>([])
+  const routeInfoRef = useRef<any>(null)
+  const [loading, setLoading] = useState(true)
   const [routeType, setRouteType] = useState<'driving' | 'walking' | 'transit'>('driving')
   const [routeInfo, setRouteInfo] = useState<any>(null)
-  const [loading, setLoading] = useState(true)
-  const [markers, setMarkers] = useState<any[]>([])
+  const [isMapReady, setIsMapReady] = useState(false)
 
-  useEffect(() => {
-    // 检查高德地图 API 是否加载
-    if (!window.AMap) {
-      console.error('高德地图 API 未加载，请检查网络连接或 API Key')
-      setLoading(false)
-      return
+  const { user } = useAuthStore()
+  const isAuthenticated = !!user
+  
+  // 模拟获取行程数据（暂时注释掉API调用）
+  const [plan, setPlan] = useState<TravelPlan | undefined>(undefined)
+  
+  // useEffect(() => {
+  //   if (planId && isAuthenticated) {
+  //     fetchTravelPlan(planId).then(setPlan).catch(console.error)
+  //   }
+  // }, [planId, isAuthenticated])
+
+  // 使用高德地图加载器
+  const { loaded: amapLoaded, error: amapError } = useAmapLoader()
+
+  // 格式化距离
+  const formatDistance = (distance: number) => {
+    if (distance < 1000) {
+      return `${distance}米`
     }
-    
-    if (!mapRef.current) {
-      console.error('地图容器未找到')
-      setLoading(false)
-      return
-    }
-    
-    initMap()
-  }, [])
-
-  useEffect(() => {
-    if (map && plan) {
-      updateMapWithPlan()
-    }
-  }, [map, plan, routeType])
-
-  const initMap = () => {
-    setLoading(true)
-    
-    try {
-      console.log('开始初始化地图...')
-      
-      const mapInstance = new window.AMap.Map(mapRef.current, {
-        zoom: 12,
-        center: [116.397428, 39.90923], // 默认北京
-        mapStyle: 'amap://styles/normal',
-        viewMode: '2D', // 先使用 2D 模式确保稳定性
-        features: ['bg', 'road', 'building', 'point']
-      })
-
-      // 地图加载完成事件
-      mapInstance.on('complete', () => {
-        console.log('地图加载完成')
-        
-        // 添加地图控件
-        try {
-          mapInstance.addControl(new window.AMap.Scale())
-          mapInstance.addControl(new window.AMap.ToolBar())
-          console.log('地图控件添加成功')
-        } catch (error) {
-          console.warn('地图控件添加失败:', error)
-        }
-
-        setMap(mapInstance)
-        setLoading(false)
-      })
-
-      // 地图加载失败事件
-      mapInstance.on('error', (error) => {
-        console.error('地图加载失败:', error)
-        setLoading(false)
-      })
-
-    } catch (error) {
-      console.error('地图初始化失败:', error)
-      setLoading(false)
-    }
+    return `${(distance / 1000).toFixed(1)}公里`
   }
 
-  const updateMapWithPlan = async () => {
-    if (!map || !plan) return
-
-    try {
-      setLoading(true)
-      
-      // 清除之前的标记和路线
-      clearMapElements()
-
-      // 获取所有地点
-      const locations = await getLocationsFromPlan(plan)
-      
-      if (locations.length === 0) {
-        message.warning('未找到有效的地理位置信息')
-        setLoading(false)
-        return
-      }
-
-      // 添加标记
-      await addMarkersToMap(locations)
-
-      // 规划路线
-      if (locations.length > 1) {
-        await planRoute(locations)
-      }
-
-      // 调整地图视野
-      adjustMapView(locations)
-      
-    } catch (error) {
-      console.error('地图更新失败:', error)
-      message.error('地图加载失败，请检查网络连接')
-    } finally {
-      setLoading(false)
+  // 格式化时间
+  const formatTime = (time: number) => {
+    if (time < 60) {
+      return `${time}秒`
     }
+    const minutes = Math.floor(time / 60)
+    if (minutes < 60) {
+      return `${minutes}分钟`
+    }
+    const hours = Math.floor(minutes / 60)
+    const remainingMinutes = minutes % 60
+    return `${hours}小时${remainingMinutes}分钟`
   }
 
-  const getLocationsFromPlan = async (plan: TravelPlan): Promise<any[]> => {
-    const geocoder = new window.AMap.Geocoder()
-    const locations: any[] = []
-
-    // 添加出发地
-    if (plan.origin) {
-      try {
-        const originResult = await geocodeLocation(geocoder, plan.origin)
-        if (originResult) {
-          locations.push({
-            name: plan.origin,
-            position: originResult,
-            type: 'origin',
-            icon: '🏠'
-          })
-        }
-      } catch (error) {
-        console.warn('出发地地理编码失败:', plan.origin)
-      }
-    }
-
-    // 添加目的地
-    try {
-      const destResult = await geocodeLocation(geocoder, plan.destination)
-      if (destResult) {
-        locations.push({
-          name: plan.destination,
-          position: destResult,
-          type: 'destination',
-          icon: '🎯'
-        })
-      }
-    } catch (error) {
-      console.warn('目的地地理编码失败:', plan.destination)
-    }
-
-    // 添加行程中的景点
-    for (const day of plan.itinerary) {
-      for (const activity of day.activities) {
-        if (activity.type === 'sightseeing' || activity.type === 'dining') {
+  // 清除所有地图元素
+  const clearMapElements = useCallback(() => {
+    if (mapInstanceRef.current) {
+      // 清除标记
+      if (markersRef.current.length > 0) {
+        markersRef.current.forEach(marker => {
           try {
-            const locationStr = typeof activity.location === 'string' 
-              ? activity.location 
-              : (activity.location as Location).name || (activity.location as Location).address || ''
-            
-            if (!locationStr) continue
-            
-            const activityResult = await geocodeLocation(geocoder, locationStr)
-            if (activityResult) {
-              locations.push({
-                name: activity.title || activity.name || locationStr,
-                position: activityResult,
-                type: 'activity',
-                icon: activity.type === 'sightseeing' ? '🏛️' : '🍽️',
-                day: day.day,
-                activity: activity
-              })
+            if (marker) {
+              mapInstanceRef.current!.remove(marker)
             }
           } catch (error) {
-            console.warn('景点地理编码失败:', locationStr)
+            console.warn('移除标记失败:', error)
           }
-        }
+        })
+        markersRef.current = []
+      }
+
+      // 清除路线
+      try {
+        mapInstanceRef.current.clearMap()
+      } catch (error) {
+        console.warn('清除地图路线失败:', error)
       }
     }
+    
+    setRouteInfo(null)
+    routeInfoRef.current = null
+  }, [])
 
-    return locations
-  }
-
-  const geocodeLocation = (geocoder: any, address: string): Promise<[number, number] | null> => {
-    return new Promise((resolve) => {
-      geocoder.getLocation(address, (status: string, result: any) => {
-        if (status === 'complete' && result.geocodes.length > 0) {
-          const location = result.geocodes[0].location
-          resolve([location.lng, location.lat])
-        } else {
-          resolve(null)
-        }
+  // 显示位置信息
+  const showLocationInfo = useCallback((location: any) => {
+    try {
+      if (!mapInstanceRef.current || !(window as any).AMap) {
+        console.warn('地图未初始化，无法显示信息窗口')
+        return
+      }
+      
+      const infoWindow = new (window as any).AMap.InfoWindow({
+        content: `
+          <div style="padding: 12px; min-width: 200px;">
+            <h4 style="margin: 0 0 8px 0; color: #1890ff;">
+              ${location.icon} ${location.name}
+            </h4>
+            ${location.activity ? `
+              <p style="margin: 4px 0; color: #666;">
+                <strong>时间:</strong> ${location.activity.time}
+              </p>
+              <p style="margin: 4px 0; color: #666;">
+                <strong>预计费用:</strong> ¥${location.activity.estimatedCost || 0}
+              </p>
+              <p style="margin: 4px 0; color: #666;">
+                <strong>描述:</strong> ${location.activity.description || '暂无描述'}
+              </p>
+            ` : ''}
+            ${location.day ? `
+              <p style="margin: 4px 0; color: #1890ff;">
+                <strong>第${location.day}天行程</strong>
+              </p>
+            ` : ''}
+          </div>
+        `,
+        anchor: 'bottom-center',
+        offset: [0, -30]
       })
-    })
-  }
 
-  const addMarkersToMap = async (locations: any[]) => {
-    const newMarkers: any[] = []
-
-    for (const location of locations) {
-      const marker = new window.AMap.Marker({
-        position: location.position,
-        title: location.name,
-        content: createMarkerContent(location),
-        anchor: 'bottom-center'
-      })
-
-      // 添加点击事件
-      marker.on('click', () => {
-        showLocationInfo(location)
-      })
-
-      map.add(marker)
-      newMarkers.push(marker)
+      infoWindow.open(mapInstanceRef.current, location.position)
+    } catch (error) {
+      console.error('显示位置信息失败:', error)
     }
+  }, [])
 
-    setMarkers(newMarkers)
-  }
-
-  const createMarkerContent = (location: any) => {
-    const colors: Record<string, string> = {
-      origin: '#52c41a',
-      destination: '#1890ff',
-      activity: '#fa8c16'
-    }
-
-    return `
-      <div style="
-        background: ${colors[location.type] || '#666'};
-        color: white;
-        padding: 8px 12px;
-        border-radius: 20px;
-        font-size: 14px;
-        font-weight: 500;
-        box-shadow: 0 2px 8px rgba(0,0,0,0.2);
-        white-space: nowrap;
-        position: relative;
-      ">
-        ${location.icon} ${location.name}
-        <div style="
-          position: absolute;
-          bottom: -6px;
-          left: 50%;
-          transform: translateX(-50%);
-          width: 0;
-          height: 0;
-          border-left: 6px solid transparent;
-          border-right: 6px solid transparent;
-          border-top: 6px solid ${colors[location.type as keyof typeof colors] || '#666'};
-        "></div>
-      </div>
-    `
-  }
-
-  const planRoute = async (locations: any[]) => {
+  // 规划路线
+  const planRoute = useCallback(async (locations: any[]) => {
     if (locations.length < 2) return
 
     const start = locations[0].position
     const end = locations[locations.length - 1].position
-    const waypoints = locations.slice(1, -1).map(loc => loc.position)
+    const waypoints = locations.slice(1, -1).map((loc: any) => loc.position)
 
     try {
       let routeService: any
 
       switch (routeType) {
         case 'driving':
-          routeService = new window.AMap.Driving({
-            map: map,
-            showTraffic: true,
-            hideMarkers: true,
-            autoFitView: false
-          })
+          if ((window as any).AMap && (window as any).AMap.Driving) {
+            routeService = new (window as any).AMap.Driving({
+              map: mapInstanceRef.current,
+              showTraffic: true,
+              hideMarkers: true,
+              autoFitView: false
+            })
+          }
           break
         case 'walking':
-          routeService = new window.AMap.Walking({
-            map: map,
-            hideMarkers: true,
-            autoFitView: false
-          })
+          if ((window as any).AMap && (window as any).AMap.Walking) {
+            routeService = new (window as any).AMap.Walking({
+              map: mapInstanceRef.current,
+              hideMarkers: true,
+              autoFitView: false
+            })
+          }
           break
         case 'transit':
-          routeService = new window.AMap.Transfer({
-            map: map,
-            hideMarkers: true,
-            autoFitView: false
-          })
+          if ((window as any).AMap && (window as any).AMap.Transfer) {
+            routeService = new (window as any).AMap.Transfer({
+              map: mapInstanceRef.current,
+              hideMarkers: true,
+              autoFitView: false
+            })
+          }
           break
       }
 
-      routeService.search(start, end, {
-        waypoints: waypoints
-      }, (status: string, result: any) => {
-        if (status === 'complete') {
-          setRouteInfo(result)
-        } else {
-          message.warning('路线规划失败')
-        }
-      })
+      if (routeService && mapInstanceRef.current) {
+        routeService.search(start, end, {
+          waypoints: waypoints
+        }, (status: string, result: any) => {
+          if (status === 'complete') {
+            setRouteInfo(result)
+            routeInfoRef.current = result
+          } else {
+            message.warning('路线规划失败')
+          }
+        })
+      } else {
+        message.warning('当前路线类型不可用或地图未初始化')
+      }
 
     } catch (error) {
       console.error('路线规划失败:', error)
+      message.error('路线规划服务暂时不可用')
     }
-  }
+  }, [routeType])
 
-  const adjustMapView = (locations: any[]) => {
-    if (locations.length === 0) return
+  // 初始化地图
+  const initMap = useCallback(async () => {
+    if (!mapRef.current || !window.AMap) {
+      console.error('地图容器未找到或高德地图 API 未加载')
+      setLoading(false)
+      return
+    }
 
-    if (locations.length === 1) {
-      map.setCenter(locations[0].position)
-      map.setZoom(15)
-    } else {
-      const bounds = new window.AMap.Bounds()
-      locations.forEach(location => {
-        bounds.extend(location.position)
+    try {
+      // 创建地图实例
+      const map = new (window as any).AMap.Map(mapRef.current, {
+        zoom: 10,
+        zooms: [3, 18],
+        viewMode: '2D',
+        mapStyle: 'amap://styles/normal',
+        features: ['bg', 'point', 'road', 'building']
       })
-      map.setBounds(bounds, false, [50, 50, 50, 50])
-    }
-  }
 
-  const clearMapElements = () => {
-    // 清除标记
-    markers.forEach(marker => {
-      map.remove(marker)
+      mapInstanceRef.current = map
+
+      // 等待地图加载完成
+      await new Promise((resolve) => {
+        map.on('complete', () => {
+          console.log('地图加载完成')
+          resolve(true)
+        })
+        
+        // 设置超时，避免无限等待
+        setTimeout(resolve, 3000, false)
+      })
+
+      // 添加地图控件（修复兼容性问题）
+      try {
+        // 检查 Scale 控件是否存在
+        if ((window as any).AMap && (window as any).AMap.Scale) {
+          map.addControl(new (window as any).AMap.Scale())
+        }
+        
+        // 检查 ToolBar 控件是否存在
+        if ((window as any).AMap && (window as any).AMap.ToolBar) {
+          map.addControl(new (window as any).AMap.ToolBar())
+        }
+        
+        console.log('地图控件添加成功')
+      } catch (error) {
+        console.warn('地图控件添加失败:', error)
+      }
+
+      setIsMapReady(true)
+      setLoading(false)
+
+    } catch (error) {
+      console.error('地图初始化失败:', error)
+      message.error('地图初始化失败，请刷新页面重试')
+      setLoading(false)
+    }
+  }, [])
+
+  // 更新地图显示
+  const updateMapWithPlan = useCallback(() => {
+    if (!mapInstanceRef.current || !plan?.itinerary) {
+      return
+    }
+
+    clearMapElements()
+
+    const newLocations: any[] = []
+    const bounds = new (window as any).AMap.Bounds()
+
+    // 添加行程中的地点
+    plan.itinerary.forEach((day: any, dayIndex: number) => {
+      day.activities.forEach((activity: any, activityIndex: number) => {
+        if (activity.location && activity.location.coordinates) {
+          const position = [
+            activity.location.coordinates.lng,
+            activity.location.coordinates.lat
+          ]
+          
+          const location = {
+            id: `activity-${dayIndex}-${activityIndex}`,
+            name: activity.title,
+            position: position,
+            icon: '📍',
+            activity: activity,
+            day: day.day
+          }
+
+          newLocations.push(location)
+          bounds.extend(position)
+        }
+      })
     })
-    setMarkers([])
 
-    // 清除路线
-    map.clearMap()
-    setRouteInfo(null)
-  }
+    // 添加住宿信息
+    if (plan.accommodation) {
+      plan.accommodation.forEach((hotel: any, index: number) => {
+        if (hotel.location && hotel.location.coordinates) {
+          const position = [
+            hotel.location.coordinates.lng,
+            hotel.location.coordinates.lat
+          ]
+          
+          const location = {
+            id: `hotel-${index}`,
+            name: hotel.name,
+            position: position,
+            icon: '🏨',
+            activity: null,
+            day: null
+          }
 
-  const showLocationInfo = (location: any) => {
-    const infoWindow = new window.AMap.InfoWindow({
-      content: `
-        <div style="padding: 12px; min-width: 200px;">
-          <h4 style="margin: 0 0 8px 0; color: #1890ff;">
-            ${location.icon} ${location.name}
-          </h4>
-          ${location.activity ? `
-            <p style="margin: 4px 0; color: #666;">
-              <strong>时间:</strong> ${location.activity.time}
-            </p>
-            <p style="margin: 4px 0; color: #666;">
-              <strong>预计费用:</strong> ¥${location.activity.estimatedCost || 0}
-            </p>
-            <p style="margin: 4px 0; color: #666;">
-              <strong>描述:</strong> ${location.activity.description || '暂无描述'}
-            </p>
-          ` : ''}
-          ${location.day ? `
-            <p style="margin: 4px 0; color: #1890ff;">
-              <strong>第${location.day}天行程</strong>
-            </p>
-          ` : ''}
-        </div>
-      `,
-      anchor: 'bottom-center',
-      offset: [0, -30]
+          newLocations.push(location)
+          bounds.extend(position)
+        }
+      })
+    }
+
+    // 创建标记
+    newLocations.forEach(location => {
+      const marker = new (window as any).AMap.Marker({
+        position: location.position,
+        title: location.name,
+        icon: new (window as any).AMap.Icon({
+          size: new (window as any).AMap.Size(24, 34),
+          image: 'https://webapi.amap.com/theme/v1.3/markers/n/mark_b.png',
+          imageSize: new (window as any).AMap.Size(24, 34)
+        }),
+        offset: new (window as any).AMap.Pixel(-12, -34)
+      })
+
+      marker.on('click', () => showLocationInfo(location))
+      marker.setMap(mapInstanceRef.current)
+      markersRef.current.push(marker)
     })
 
-    infoWindow.open(map, location.position)
-  }
-
-  const getRouteTypeIcon = (type: string) => {
-    switch (type) {
-      case 'driving': return <CarOutlined />
-      case 'walking': return '🚶'
-      case 'transit': return <SwapOutlined />
-      default: return <CarOutlined />
+    // 调整地图视野
+    if (newLocations.length > 0) {
+      mapInstanceRef.current.setBounds(bounds, false, [50, 50, 50, 50])
     }
-  }
 
-  const formatRouteInfo = (info: any) => {
-    if (!info || !info.routes || info.routes.length === 0) return null
+    onLocationsChange?.(newLocations)
+  }, [plan, onLocationsChange, clearMapElements, showLocationInfo])
 
-    const route = info.routes[0]
-    const distance = (route.distance / 1000).toFixed(1)
-    const time = Math.round(route.time / 60)
-
-    return {
-      distance: `${distance} 公里`,
-      time: `${time} 分钟`,
-      tolls: route.tolls ? `过路费: ¥${route.tolls}` : ''
+  // 监听高德地图加载状态
+  useEffect(() => {
+    if (amapLoaded && !amapError) {
+      initMap()
+    } else if (amapError) {
+      console.error('高德地图加载失败:', amapError)
+      message.error('地图服务暂时不可用')
+      setLoading(false)
     }
+  }, [amapLoaded, amapError, initMap])
+
+  // 监听路线类型变化
+  useEffect(() => {
+    if (isMapReady && locations.length > 1) {
+      planRoute(locations)
+    }
+  }, [routeType, isMapReady, locations, planRoute])
+
+  // 监听行程数据变化
+  useEffect(() => {
+    if (isMapReady && plan) {
+      updateMapWithPlan()
+    }
+  }, [isMapReady, plan, updateMapWithPlan])
+
+  // 清理函数
+  useEffect(() => {
+    return () => {
+      // 使用 setTimeout 确保在 React 渲染周期之后执行清理
+      setTimeout(() => {
+        if (mapInstanceRef.current) {
+          try {
+            // 移除所有事件监听器
+            mapInstanceRef.current.off('complete')
+            mapInstanceRef.current.off('error')
+            
+            // 清除所有标记
+            clearMapElements()
+            
+            // 销毁地图实例
+            try {
+              mapInstanceRef.current.destroy()
+            } catch (error) {
+              console.warn('销毁地图实例失败:', error)
+            }
+            
+            // 重置引用
+            mapInstanceRef.current = null
+            
+          } catch (cleanupError) {
+            console.error('地图清理过程中发生错误:', cleanupError)
+          }
+        }
+      }, 0)
+    }
+  }, [clearMapElements])
+
+  if (loading) {
+    return (
+      <StyledMapContainer>
+        <StyledSpin>
+          <div>地图加载中...</div>
+        </StyledSpin>
+      </StyledMapContainer>
+    )
   }
 
   return (
-    <Card title="🗺️ 行程地图" style={{ height: '100%' }}>
-      <MapContainer ref={mapRef}>
-        {loading && (
-          <LoadingOverlay>
-            <Spin size="large" tip="地图加载中..." />
-          </LoadingOverlay>
-        )}
+    <StyledMapContainer>
+      <MapContainer ref={mapRef} />
+      
+      {/* 控制面板 */}
+      <ControlPanel>
+        <RouteTypeSelector>
+          <Select
+            value={routeType}
+            onChange={(value) => {
+              setRouteType(value)
+              if (mapInstanceRef.current && locations.length > 1) {
+                planRoute(locations)
+              }
+            }}
+            style={{ width: 120 }}
+          >
+            <Option value="driving">驾车</Option>
+            <Option value="walking">步行</Option>
+            <Option value="transit">公交</Option>
+          </Select>
+        </RouteTypeSelector>
         
-        <MapControls>
-          <Space direction="vertical" size="small">
-            <Select
-              value={routeType}
-              onChange={setRouteType}
-              style={{ width: 120 }}
-              size="small"
-            >
-              <Select.Option value="driving">
-                <CarOutlined /> 驾车
-              </Select.Option>
-              <Select.Option value="walking">
-                🚶 步行
-              </Select.Option>
-              <Select.Option value="transit">
-                <SwapOutlined /> 公交
-              </Select.Option>
-            </Select>
-            
-            <Button 
-              size="small" 
-              icon={<EnvironmentOutlined />}
-              onClick={() => updateMapWithPlan()}
-            >
-              刷新
-            </Button>
-          </Space>
-        </MapControls>
+        <ButtonGroup>
+          <Button 
+            onClick={() => planRoute(locations)} 
+            disabled={!mapInstanceRef.current || locations.length < 2}
+          >
+            规划路线
+          </Button>
+          <Button 
+            onClick={clearMapElements} 
+            danger 
+            disabled={!mapInstanceRef.current}
+          >
+            清除
+          </Button>
+          <Button 
+            size="small" 
+            icon={<EnvironmentOutlined />}
+            onClick={() => updateMapWithPlan()}
+            disabled={!mapInstanceRef.current}
+          >
+            刷新
+          </Button>
+        </ButtonGroup>
+      </ControlPanel>
 
-        {routeInfo && formatRouteInfo(routeInfo) && (
-          <RouteInfo>
-            <Space>
-              {getRouteTypeIcon(routeType)}
-              <span><strong>距离:</strong> {formatRouteInfo(routeInfo)?.distance}</span>
-              <span><strong>时间:</strong> {formatRouteInfo(routeInfo)?.time}</span>
-              {formatRouteInfo(routeInfo)?.tolls && (
-                <span>{formatRouteInfo(routeInfo)?.tolls}</span>
-              )}
-            </Space>
-          </RouteInfo>
-        )}
-      </MapContainer>
-    </Card>
+      {/* 路线信息面板 */}
+      {routeInfo && (
+        <RouteInfoPanel>
+          <RouteInfoHeader>
+            <h4>路线信息</h4>
+            <CloseButton onClick={() => setRouteInfo(null)}>×</CloseButton>
+          </RouteInfoHeader>
+          <RouteDetails>
+            <p><strong>距离:</strong> {formatDistance(routeInfo.distance)}</p>
+            <p><strong>预计时间:</strong> {formatTime(routeInfo.time)}</p>
+            {routeInfo.taxi_cost && (
+              <p><strong>打车费用:</strong> ¥{routeInfo.taxi_cost}</p>
+            )}
+          </RouteDetails>
+        </RouteInfoPanel>
+      )}
+    </StyledMapContainer>
   )
 }
 
