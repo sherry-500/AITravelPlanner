@@ -29,7 +29,7 @@ export class AmapLoader {
       // 创建script标签
       const script = document.createElement('script')
       script.type = 'text/javascript'
-      script.src = `https://webapi.amap.com/maps?v=2.0&key=${webApiKey}&plugin=AMap.Geocoder,AMap.Driving,AMap.Walking,AMap.Transfer,AMap.InfoWindow,AMap.Marker`
+      script.src = `https://webapi.amap.com/maps?v=2.0&key=${webApiKey}&plugin=AMap.Geocoder,AMap.Driving,AMap.Walking,AMap.Transfer,AMap.InfoWindow,AMap.Marker,AMap.Polyline,AMap.PathSimplifier`
       
       script.onload = () => {
         this.isLoaded = true

@@ -408,10 +408,11 @@ const DayMapDisplay: React.FC<DayMapDisplayProps> = ({
   }
 
   // 绘制路线
-  const drawRoute = (points: MapPoint[]) => {
+  const drawRoute = async (points: MapPoint[]) => {
     if (!map || !window.AMap || points.length < 2) return
 
     const newPolylines: any[] = []
+    let retryCount = 0 // 重试计数器
 
     try {
       // 更严格的坐标验证
@@ -431,62 +432,137 @@ const DayMapDisplay: React.FC<DayMapDisplayProps> = ({
         return
       }
 
-      // 创建路径点数组，使用验证后的坐标
-      const path = validPoints.map(point => [
-        parseFloat(String(point.lng)), 
-        parseFloat(String(point.lat))
-      ])
-
-      // 绘制虚线路径
-      const polyline = new window.AMap.Polyline({
-        path: path,
-        strokeColor: '#ff4d6d',
-        strokeWeight: 4,
-        strokeStyle: 'dashed',
-        strokeOpacity: 0.8,
-        strokeDasharray: [10, 5],
-        lineJoin: 'round',
-        lineCap: 'round'
-      })
-
-      map.add(polyline)
-      newPolylines.push(polyline)
-      setPolylines(newPolylines)
-
-      // 调整地图视野以包含所有点 - 暂时禁用以避免Pixel错误
-      // if (validPoints.length > 0) {
-      //   try {
-      //     const bounds = new window.AMap.Bounds()
-      //     validPoints.forEach(point => {
-      //       const lng = parseFloat(String(point.lng))
-      //       const lat = parseFloat(String(point.lat))
-      //       
-      //       // 验证坐标再添加到bounds
-      //       if (!isNaN(lng) && !isNaN(lat) && isFinite(lng) && isFinite(lat)) {
-      //         bounds.extend([lng, lat])
-      //       }
-      //     })
-      //     
-      //     // 检查bounds是否有效
-      //     if (bounds.getNorthEast && bounds.getSouthWest) {
-      //       const ne = bounds.getNorthEast()
-      //       const sw = bounds.getSouthWest()
-      //       
-      //       if (ne && sw && 
-      //           !isNaN(ne.lng) && !isNaN(ne.lat) && 
-      //           !isNaN(sw.lng) && !isNaN(sw.lat)) {
-      //         map.setBounds(bounds, false, [50, 50, 50, 50])
-      //       } else {
-      //         console.warn('Bounds坐标无效，跳过setBounds')
-      //       }
-      //     }
-      //   } catch (boundsError) {
-      //     console.warn('地图视野调整失败:', boundsError)
-      //   }
-      // }
+      // 对所有点进行逐段步行路线规划
+      console.log('🔍 检查Walking插件状态...')
+      console.log('window.AMap:', !!window.AMap)
+      console.log('window.AMap.Walking:', typeof window.AMap?.Walking)
+      console.log('Walking插件是否为函数:', typeof window.AMap?.Walking === 'function')
+      
+      if (window.AMap && typeof window.AMap.Walking === 'function') {
+        console.log('✅ Walking插件可用，开始逐段步行路线规划')
+        
+        // 逐段进行路线规划
+        const planRoutes = async () => {
+          for (let i = 0; i < validPoints.length - 1; i++) {
+            try {
+              const start = [validPoints[i].lng, validPoints[i].lat]
+              const end = [validPoints[i + 1].lng, validPoints[i + 1].lat]
+              
+              console.log(`🚶 规划第 ${i + 1} 段路线，起点:`, start, '终点:', end)
+              
+              const walking = new window.AMap.Walking({
+                map: map,
+                panel: 'panel',
+                hideMarkers: true,
+                showTraffic: false
+              })
+              
+              const routeResult = await new Promise((resolve, reject) => {
+                walking.search(start, end, (status: string, result: any) => {
+                  if (status === 'complete' && result.routes && result.routes.length > 0) {
+                    resolve(result.routes[0])
+                  } else {
+                    reject(result)
+                  }
+                })
+              })
+              
+              const route = routeResult as any
+              console.log(`✅ 第 ${i + 1} 段路线规划成功，距离:`, route.distance)
+              
+              // 提取路径点
+              const path = []
+              for (let j = 0; j < route.steps.length; j++) {
+                const step = route.steps[j]
+                for (let k = 0; k < step.path.length; k++) {
+                  const point = step.path[k]
+                  path.push([point.lng, point.lat])
+                }
+              }
+              
+              // 绘制这段路径
+              const polyline = new window.AMap.Polyline({
+                path: path,
+                strokeColor: '#ff4d6d',
+                strokeWeight: 4,
+                strokeStyle: 'solid',
+                strokeOpacity: 0.8,
+                lineJoin: 'round',
+                lineCap: 'round'
+              })
+              
+              map.add(polyline)
+              newPolylines.push(polyline)
+              
+              console.log(`📍 第 ${i + 1} 段路径点数量:`, path.length)
+              
+            } catch (error) {
+              console.warn(`⚠️ 第 ${i + 1} 段路线规划失败，使用直线连接`, error)
+              // 如果某一段失败，使用直线连接
+              const straightPath = [
+                [validPoints[i].lng, validPoints[i].lat],
+                [validPoints[i + 1].lng, validPoints[i + 1].lat]
+              ]
+              
+              const polyline = new window.AMap.Polyline({
+                path: straightPath,
+                strokeColor: '#888888',
+                strokeWeight: 3,
+                strokeStyle: 'dashed',
+                strokeOpacity: 0.6,
+                strokeDasharray: [15, 8],
+                lineJoin: 'round',
+                lineCap: 'round'
+              })
+              
+              map.add(polyline)
+              newPolylines.push(polyline)
+            }
+          }
+          
+          setPolylines(newPolylines)
+          console.log('🎉 完成所有路段的路线规划')
+        }
+        
+        planRoutes()
+      } else {
+        console.error('❌ 高德地图Walking插件不可用，使用直线连接')
+        console.log('当前AMap对象:', window.AMap)
+        console.log('Walking插件类型:', typeof window.AMap?.Walking)
+        drawStraightLine(validPoints)
+      }
     } catch (routeError) {
       console.warn('路线绘制失败:', routeError)
     }
+  }
+
+  // 绘制直线连接（备用方案）
+  const drawStraightLine = (validPoints: MapPoint[]) => {
+    const newPolylines: any[] = []
+    
+    // 创建路径点数组，使用验证后的坐标
+    const path = validPoints.map(point => [
+      parseFloat(String(point.lng)), 
+      parseFloat(String(point.lat))
+    ])
+
+    // 绘制虚线路径作为备用方案（更明显的虚线）
+    const polyline = new window.AMap.Polyline({
+      path: path,
+      strokeColor: '#888888', // 使用灰色表示备用方案
+      strokeWeight: 3,
+      strokeStyle: 'dashed', // 使用虚线表示备用方案
+      strokeOpacity: 0.6,
+      strokeDasharray: [15, 8], // 更明显的虚线 pattern
+      lineJoin: 'round',
+      lineCap: 'round'
+    })
+
+    map.add(polyline)
+    newPolylines.push(polyline)
+    setPolylines(newPolylines)
+    
+    console.log('⚠️ 使用直线连接作为备用方案，路径点数:', path.length)
   }
 
   // 计算地图中心点
