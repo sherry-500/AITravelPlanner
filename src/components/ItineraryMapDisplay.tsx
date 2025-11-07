@@ -242,6 +242,16 @@ const ItineraryMapDisplay: React.FC<ItineraryMapDisplayProps> = ({
     const newMarkers: any[] = []
 
     points.forEach((point, index) => {
+      // 验证坐标有效性
+      const lng = Number(point.lng)
+      const lat = Number(point.lat)
+      
+      if (isNaN(lng) || isNaN(lat) || !isFinite(lng) || !isFinite(lat) ||
+          lng < -180 || lng > 180 || lat < -90 || lat > 90) {
+        console.warn('跳过无效坐标的标记:', { name: point.name, lng, lat })
+        return
+      }
+
       // 创建自定义标记图标
       const markerContent = `
         <div style="
@@ -262,40 +272,44 @@ const ItineraryMapDisplay: React.FC<ItineraryMapDisplayProps> = ({
         </div>
       `
 
-      const marker = new window.AMap.Marker({
-        position: [point.lng, point.lat],
-        content: markerContent,
-        anchor: 'center',
-        offset: new window.AMap.Pixel(0, 0)
-      })
-
-      // 添加点击事件
-      marker.on('click', () => {
-        const infoWindow = new window.AMap.InfoWindow({
-          content: `
-            <div style="padding: 10px; min-width: 200px;">
-              <h4 style="margin: 0 0 8px 0; color: #333;">${point.name}</h4>
-              <p style="margin: 0 0 5px 0; color: #666; font-size: 12px;">
-                <span style="color: #999;">📍</span> ${point.address}
-              </p>
-              <p style="margin: 0 0 5px 0; color: #666; font-size: 12px;">
-                <span style="color: #999;">⏰</span> ${point.activity.startTime} - ${point.activity.endTime}
-              </p>
-              ${point.activity.description ? `
-                <p style="margin: 5px 0 0 0; color: #666; font-size: 12px;">
-                  ${point.activity.description}
-                </p>
-              ` : ''}
-            </div>
-          `,
-          anchor: 'bottom-center',
-          offset: new window.AMap.Pixel(0, -35)
+      try {
+        const marker = new window.AMap.Marker({
+          position: [lng, lat],
+          content: markerContent,
+          anchor: 'center',
+          offset: new window.AMap.Pixel(0, 0)
         })
-        infoWindow.open(map, marker.getPosition())
-      })
 
-      map.add(marker)
-      newMarkers.push(marker)
+        // 添加点击事件
+        marker.on('click', () => {
+          const infoWindow = new window.AMap.InfoWindow({
+            content: `
+              <div style="padding: 10px; min-width: 200px;">
+                <h4 style="margin: 0 0 8px 0; color: #333;">${point.name}</h4>
+                <p style="margin: 0 0 5px 0; color: #666; font-size: 12px;">
+                  <span style="color: #999;">📍</span> ${point.address}
+                </p>
+                <p style="margin: 0 0 5px 0; color: #666; font-size: 12px;">
+                  <span style="color: #999;">⏰</span> ${point.activity.startTime || point.activity.time || ''} - ${point.activity.endTime || ''}
+                </p>
+                ${point.activity.description ? `
+                  <p style="margin: 5px 0 0 0; color: #666; font-size: 12px;">
+                    ${point.activity.description}
+                  </p>
+                ` : ''}
+              </div>
+            `,
+            anchor: 'bottom-center',
+            offset: new window.AMap.Pixel(0, -35)
+          })
+          infoWindow.open(map, marker.getPosition())
+        })
+
+        map.add(marker)
+        newMarkers.push(marker)
+      } catch (error) {
+        console.error('创建标记失败:', { name: point.name, lng, lat, error })
+      }
     })
 
     setMarkers(newMarkers)
@@ -345,24 +359,46 @@ const ItineraryMapDisplay: React.FC<ItineraryMapDisplayProps> = ({
     
     try {
       const mapPoints = await convertActivitiesToMapPoints(dayItinerary.activities)
+      console.log('转换后的地图点:', mapPoints)
+      
       if (mapPoints.length > 0) {
         // 更新地图中心点
         const center = calculateMapCenter(mapPoints)
+        console.log('计算的地图中心点:', center)
+        
+        // 验证中心点坐标
+        const [centerLng, centerLat] = center
+        if (isNaN(centerLng) || isNaN(centerLat) || !isFinite(centerLng) || !isFinite(centerLat)) {
+          console.error('地图中心点坐标无效:', center)
+          return
+        }
+        
         if (map) {
-          map.setCenter(center)
-          
-          // 根据点的数量调整缩放级别
-          if (mapPoints.length === 1) {
-            map.setZoom(15)
-          } else if (mapPoints.length <= 3) {
-            map.setZoom(13)
-          } else {
-            map.setZoom(12)
+          try {
+            map.setCenter(center)
+            console.log('地图中心点设置成功:', center)
+            
+            // 根据点的数量调整缩放级别
+            if (mapPoints.length === 1) {
+              map.setZoom(15)
+            } else if (mapPoints.length <= 3) {
+              map.setZoom(13)
+            } else {
+              map.setZoom(12)
+            }
+          } catch (setCenterError) {
+            console.error('设置地图中心点失败:', setCenterError)
           }
         }
         
         addMarkers(mapPoints)
         drawRoute(mapPoints)
+      } else {
+        console.warn('没有有效的地图点，使用默认中心点')
+        if (map) {
+          map.setCenter([120.1551, 30.2741])
+          map.setZoom(13)
+        }
       }
     } catch (error) {
       console.error('更新地图显示失败:', error)
@@ -371,20 +407,57 @@ const ItineraryMapDisplay: React.FC<ItineraryMapDisplayProps> = ({
 
   // 计算地图中心点
   const calculateMapCenter = (points: MapPoint[]): [number, number] => {
-    if (points.length === 0) return [120.1551, 30.2741]
+    console.log('计算地图中心点，输入点数:', points.length)
+    
+    if (points.length === 0) {
+      console.log('无有效点，使用默认中心点')
+      return [120.1551, 30.2741]
+    }
     
     const validPoints = points.filter(point => {
       const lng = Number(point.lng)
       const lat = Number(point.lat)
-      return !isNaN(lng) && !isNaN(lat) && 
-             lng >= -180 && lng <= 180 && 
-             lat >= -90 && lat <= 90
+      const isValid = !isNaN(lng) && !isNaN(lat) && 
+                     isFinite(lng) && isFinite(lat) &&
+                     lng >= -180 && lng <= 180 && 
+                     lat >= -90 && lat <= 90 &&
+                     lng !== 0 && lat !== 0  // 排除(0,0)坐标
+      
+      if (!isValid) {
+        console.warn('过滤无效点:', { name: point.name, lng, lat })
+      }
+      return isValid
     })
     
-    if (validPoints.length === 0) return [120.1551, 30.2741]
+    console.log('有效点数量:', validPoints.length)
     
-    const avgLng = validPoints.reduce((sum, point) => sum + Number(point.lng), 0) / validPoints.length
-    const avgLat = validPoints.reduce((sum, point) => sum + Number(point.lat), 0) / validPoints.length
+    if (validPoints.length === 0) {
+      console.log('无有效点，使用默认中心点')
+      return [120.1551, 30.2741]
+    }
+    
+    // 计算平均坐标
+    let sumLng = 0
+    let sumLat = 0
+    
+    validPoints.forEach(point => {
+      const lng = Number(point.lng)
+      const lat = Number(point.lat)
+      sumLng += lng
+      sumLat += lat
+      console.log('累加坐标:', { name: point.name, lng, lat, sumLng, sumLat })
+    })
+    
+    const avgLng = sumLng / validPoints.length
+    const avgLat = sumLat / validPoints.length
+    
+    console.log('计算结果:', { avgLng, avgLat, validPointsCount: validPoints.length })
+    
+    // 最终验证计算结果
+    if (isNaN(avgLng) || isNaN(avgLat) || !isFinite(avgLng) || !isFinite(avgLat)) {
+      console.error('中心点计算结果无效，使用默认坐标:', { avgLng, avgLat })
+      return [120.1551, 30.2741]
+    }
     
     return [avgLng, avgLat]
   }
@@ -578,7 +651,8 @@ const ItineraryMapDisplay: React.FC<ItineraryMapDisplayProps> = ({
               message="地图加载失败"
               description={error}
               type="error"
-              showIcon              action={
+              showIcon
+              action={
                 <Button size="small" onClick={initMap}>
                   重试
                 </Button>

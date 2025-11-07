@@ -283,18 +283,31 @@ const DayMapDisplay: React.FC<DayMapDisplayProps> = ({
         // 使用验证后的坐标
         const position = [lng, lat]
         
-        // 使用简单的圆形标记，避免复杂的 HTML 内容
+        // 使用简单的HTML内容标记，避免复杂的Icon对象
+        const markerContent = `
+          <div style="
+            width: 32px;
+            height: 32px;
+            background: #ff4d6d;
+            border: 3px solid #fff;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-weight: bold;
+            font-size: 14px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+            cursor: pointer;
+          ">
+            ${point.index || index + 1}
+          </div>
+        `
+
         const marker = new window.AMap.Marker({
           position: position,
-          icon: new window.AMap.Icon({
-            size: new window.AMap.Size(32, 32),
-            image: `data:image/svg+xml;base64,${btoa(`
-              <svg width="32" height="32" xmlns="http://www.w3.org/2000/svg">
-                <circle cx="16" cy="16" r="14" fill="#ff4d6d" stroke="#fff" stroke-width="3"/>
-                <text x="16" y="20" text-anchor="middle" fill="white" font-size="12" font-weight="bold">${point.index || index + 1}</text>
-              </svg>
-            `)}`
-          })
+          content: markerContent,
+          anchor: 'center'
         })
 
         // 添加点击事件
@@ -321,7 +334,9 @@ const DayMapDisplay: React.FC<DayMapDisplayProps> = ({
                     </p>
                   ` : ''}
                 </div>
-              `
+              `,
+              anchor: 'bottom-center',
+              offset: [0, -35]
             })
             infoWindow.open(map, position)
           } catch (infoError) {
@@ -385,23 +400,97 @@ const DayMapDisplay: React.FC<DayMapDisplayProps> = ({
       newPolylines.push(polyline)
       setPolylines(newPolylines)
 
-      // 调整地图视野以包含所有点
-      if (validPoints.length > 0) {
-        try {
-          const bounds = new window.AMap.Bounds()
-          validPoints.forEach(point => {
-            const lng = parseFloat(String(point.lng))
-            const lat = parseFloat(String(point.lat))
-            bounds.extend([lng, lat])
-          })
-          map.setBounds(bounds, false, [50, 50, 50, 50])
-        } catch (boundsError) {
-          console.warn('地图视野调整失败:', boundsError)
-        }
-      }
+      // 调整地图视野以包含所有点 - 暂时禁用以避免Pixel错误
+      // if (validPoints.length > 0) {
+      //   try {
+      //     const bounds = new window.AMap.Bounds()
+      //     validPoints.forEach(point => {
+      //       const lng = parseFloat(String(point.lng))
+      //       const lat = parseFloat(String(point.lat))
+      //       
+      //       // 验证坐标再添加到bounds
+      //       if (!isNaN(lng) && !isNaN(lat) && isFinite(lng) && isFinite(lat)) {
+      //         bounds.extend([lng, lat])
+      //       }
+      //     })
+      //     
+      //     // 检查bounds是否有效
+      //     if (bounds.getNorthEast && bounds.getSouthWest) {
+      //       const ne = bounds.getNorthEast()
+      //       const sw = bounds.getSouthWest()
+      //       
+      //       if (ne && sw && 
+      //           !isNaN(ne.lng) && !isNaN(ne.lat) && 
+      //           !isNaN(sw.lng) && !isNaN(sw.lat)) {
+      //         map.setBounds(bounds, false, [50, 50, 50, 50])
+      //       } else {
+      //         console.warn('Bounds坐标无效，跳过setBounds')
+      //       }
+      //     }
+      //   } catch (boundsError) {
+      //     console.warn('地图视野调整失败:', boundsError)
+      //   }
+      // }
     } catch (routeError) {
       console.warn('路线绘制失败:', routeError)
     }
+  }
+
+  // 计算地图中心点
+  const calculateMapCenter = (points: MapPoint[]): [number, number] => {
+    console.log('计算地图中心点，输入点数:', points.length)
+    
+    if (points.length === 0) {
+      console.log('无有效点，使用默认中心点')
+      return [120.1551, 30.2741]
+    }
+    
+    const validPoints = points.filter(point => {
+      const lng = Number(point.lng)
+      const lat = Number(point.lat)
+      const isValid = !isNaN(lng) && !isNaN(lat) && 
+                     isFinite(lng) && isFinite(lat) &&
+                     lng >= -180 && lng <= 180 && 
+                     lat >= -90 && lat <= 90 &&
+                     lng !== 0 && lat !== 0  // 排除(0,0)坐标
+      
+      if (!isValid) {
+        console.warn('过滤无效点:', { name: point.name, lng, lat })
+      }
+      return isValid
+    })
+    
+    console.log('有效点数量:', validPoints.length)
+    
+    if (validPoints.length === 0) {
+      console.log('无有效点，使用默认中心点')
+      return [120.1551, 30.2741]
+    }
+    
+    // 计算平均坐标
+    let sumLng = 0
+    let sumLat = 0
+    
+    validPoints.forEach(point => {
+      const lng = Number(point.lng)
+      const lat = Number(point.lat)
+      sumLng += lng
+      sumLat += lat
+      console.log('累加坐标:', { name: point.name, lng, lat, sumLng, sumLat })
+    })
+    
+    const avgLng = sumLng / validPoints.length
+    const avgLat = sumLat / validPoints.length
+    
+    console.log('计算结果:', { avgLng, avgLat, validPointsCount: validPoints.length })
+    
+    // 最终验证计算结果
+    if (isNaN(avgLng) || isNaN(avgLat) || !isFinite(avgLng) || !isFinite(avgLat)) {
+      console.error('中心点计算结果无效，使用默认坐标:', { avgLng, avgLat })
+      return [120.1551, 30.2741]
+    }
+    
+    return [avgLng, avgLat]
   }
 
   // 更新地图显示
@@ -415,48 +504,50 @@ const DayMapDisplay: React.FC<DayMapDisplayProps> = ({
     
     try {
       const mapPoints = await convertActivitiesToMapPoints(dayItinerary.activities)
+      console.log('转换后的地图点:', mapPoints)
+      
       if (mapPoints.length > 0) {
         // 更新地图中心点
         const center = calculateMapCenter(mapPoints)
+        console.log('计算的地图中心点:', center)
+        
+        // 验证中心点坐标
+        const [centerLng, centerLat] = center
+        if (isNaN(centerLng) || isNaN(centerLat) || !isFinite(centerLng) || !isFinite(centerLat)) {
+          console.error('地图中心点坐标无效:', center)
+          return
+        }
+        
         if (map) {
-          map.setCenter(center)
-          
-          // 根据点的数量调整缩放级别
-          if (mapPoints.length === 1) {
-            map.setZoom(15)
-          } else if (mapPoints.length <= 3) {
-            map.setZoom(13)
-          } else {
-            map.setZoom(12)
+          try {
+            map.setCenter(center)
+            console.log('地图中心点设置成功:', center)
+            
+            // 根据点的数量调整缩放级别
+            if (mapPoints.length === 1) {
+              map.setZoom(15)
+            } else if (mapPoints.length <= 3) {
+              map.setZoom(13)
+            } else {
+              map.setZoom(12)
+            }
+          } catch (setCenterError) {
+            console.error('设置地图中心点失败:', setCenterError)
           }
         }
         
         addMarkers(mapPoints)
         drawRoute(mapPoints)
+      } else {
+        console.warn('没有有效的地图点，使用默认中心点')
+        if (map) {
+          map.setCenter([120.1551, 30.2741])
+          map.setZoom(13)
+        }
       }
     } catch (error) {
       console.error('更新地图显示失败:', error)
     }
-  }
-
-  // 计算地图中心点
-  const calculateMapCenter = (points: MapPoint[]): [number, number] => {
-    if (points.length === 0) return [120.1551, 30.2741]
-    
-    const validPoints = points.filter(point => {
-      const lng = Number(point.lng)
-      const lat = Number(point.lat)
-      return !isNaN(lng) && !isNaN(lat) && 
-             lng >= -180 && lng <= 180 && 
-             lat >= -90 && lat <= 90
-    })
-    
-    if (validPoints.length === 0) return [120.1551, 30.2741]
-    
-    const avgLng = validPoints.reduce((sum, point) => sum + Number(point.lng), 0) / validPoints.length
-    const avgLat = validPoints.reduce((sum, point) => sum + Number(point.lat), 0) / validPoints.length
-    
-    return [avgLng, avgLat]
   }
 
   // 初始化地图

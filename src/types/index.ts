@@ -45,6 +45,7 @@ export interface DayItinerary {
   activities: Activity[]
   accommodation?: Accommodation
   transportation?: Transportation[]
+  totalCost?: number
 }
 
 // 活动
@@ -63,7 +64,7 @@ export interface Activity {
   description: string
   rating?: number
   images?: string[]
-  tips?: string[]
+  tips?: string | string[]
 }
 
 // 住宿
@@ -73,7 +74,7 @@ export interface Accommodation {
   address: string
   checkIn: string
   checkOut: string
-  estimatedCost: number
+  estimatedCost?: number
   cost?: number
   rating: number
   amenities: string[]

@@ -91,7 +91,10 @@ const ItineraryDisplay: React.FC<ItineraryDisplayProps> = ({ plan, onEdit, onSav
     return icons[type] || '📍'
   }
 
-  const totalCost = plan.itinerary.reduce((sum, day) => sum + day.totalCost, 0)
+  const totalCost = plan.itinerary.reduce((sum, day) => {
+    const dayCost = day.totalCost || 0;
+    return sum + (typeof dayCost === 'number' ? dayCost : 0);
+  }, 0)
 
   return (
     <motion.div
@@ -105,7 +108,7 @@ const ItineraryDisplay: React.FC<ItineraryDisplayProps> = ({ plan, onEdit, onSav
             <span>📋 {plan.title}</span>
             <Space>
               <Tag color="blue">{plan.destination}</Tag>
-              <Tag color="green">¥{totalCost.toLocaleString()}</Tag>
+              <Tag color="green">¥{(totalCost || 0).toLocaleString()}</Tag>
             </Space>
           </div>
         }
@@ -133,7 +136,7 @@ const ItineraryDisplay: React.FC<ItineraryDisplayProps> = ({ plan, onEdit, onSav
               <EnvironmentOutlined /> {plan.destination}
             </span>
             <span>
-              <DollarOutlined /> 预算 ¥{plan.budget.toLocaleString()}
+              <DollarOutlined /> 预算 ¥{(plan.budget || 0).toLocaleString()}
             </span>
             <span>👥 {plan.travelers} 人</span>
           </Space>
@@ -153,7 +156,7 @@ const ItineraryDisplay: React.FC<ItineraryDisplayProps> = ({ plan, onEdit, onSav
                   </h3>
                 </div>
                 <CostBadge>
-                  当日费用: ¥{day.totalCost.toLocaleString()}
+                  当日费用: ¥{(day.totalCost || 0).toLocaleString()}
                 </CostBadge>
               </DayHeader>
             }
@@ -167,7 +170,7 @@ const ItineraryDisplay: React.FC<ItineraryDisplayProps> = ({ plan, onEdit, onSav
                   <ActivityCard>
                     <ActivityHeader>
                       <div>
-                        <ActivityTitle>{activity.name}</ActivityTitle>
+                        <ActivityTitle>{activity.title || activity.name}</ActivityTitle>
                         <Tag color={getActivityTypeColor(activity.type)} size="small">
                           {activity.type === 'attraction' && '景点'}
                           {activity.type === 'restaurant' && '餐厅'}
@@ -176,7 +179,7 @@ const ItineraryDisplay: React.FC<ItineraryDisplayProps> = ({ plan, onEdit, onSav
                           {activity.type === 'other' && '其他'}
                         </Tag>
                       </div>
-                      <CostBadge>¥{activity.cost}</CostBadge>
+                      <CostBadge>¥{(activity.cost || activity.estimatedCost || 0).toLocaleString()}</CostBadge>
                     </ActivityHeader>
                     
                     <ActivityMeta>
@@ -184,7 +187,7 @@ const ItineraryDisplay: React.FC<ItineraryDisplayProps> = ({ plan, onEdit, onSav
                         <ClockCircleOutlined /> {activity.startTime} - {activity.endTime}
                       </span>
                       <span>
-                        <EnvironmentOutlined /> {activity.location.name}
+                        <EnvironmentOutlined /> {typeof activity.location === 'string' ? activity.location : activity.location?.name || '未知地点'}
                       </span>
                       <span>⏱️ {activity.duration} 小时</span>
                       {activity.rating && (
@@ -198,14 +201,20 @@ const ItineraryDisplay: React.FC<ItineraryDisplayProps> = ({ plan, onEdit, onSav
                       </p>
                     )}
                     
-                    {activity.tips && activity.tips.length > 0 && (
+                    {activity.tips && (
                       <div style={{ marginTop: 8 }}>
                         <strong style={{ fontSize: '12px', color: '#1890ff' }}>💡 小贴士：</strong>
-                        <ul style={{ margin: '4px 0', paddingLeft: '16px', fontSize: '12px', color: '#666' }}>
-                          {activity.tips.map((tip, tipIndex) => (
-                            <li key={tipIndex}>{tip}</li>
-                          ))}
-                        </ul>
+                        <div style={{ margin: '4px 0', fontSize: '12px', color: '#666' }}>
+                          {Array.isArray(activity.tips) ? (
+                            <ul style={{ paddingLeft: '16px' }}>
+                              {activity.tips.map((tip, tipIndex) => (
+                                <li key={tipIndex}>{tip}</li>
+                              ))}
+                            </ul>
+                          ) : (
+                            <p style={{ margin: '4px 0' }}>{activity.tips}</p>
+                          )}
+                        </div>
                       </div>
                     )}
                     
@@ -242,12 +251,12 @@ const ItineraryDisplay: React.FC<ItineraryDisplayProps> = ({ plan, onEdit, onSav
                         <ActivityTitle>{day.accommodation.name}</ActivityTitle>
                         <Tag color="green" size="small">住宿</Tag>
                       </div>
-                      <CostBadge>¥{day.accommodation.cost}</CostBadge>
+                      <CostBadge>¥{(day.accommodation.cost || day.accommodation.estimatedCost || 0).toLocaleString()}</CostBadge>
                     </ActivityHeader>
                     
                     <ActivityMeta>
                       <span>
-                        <EnvironmentOutlined /> {day.accommodation.location.name}
+                        <EnvironmentOutlined /> {day.accommodation.address || (typeof day.accommodation.location === 'string' ? day.accommodation.location : day.accommodation.location?.name) || '未知地址'}
                       </span>
                       <span>
                         📅 {day.accommodation.checkIn} - {day.accommodation.checkOut}
