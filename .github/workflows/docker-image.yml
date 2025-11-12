@@ -2,29 +2,49 @@ name: Docker Image CI
 
 on:
   workflow_dispatch:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
 
 jobs:
   build:
     runs-on: ubuntu-latest
     
     steps:
-      - uses: actions/checkout@v2
+      - name: Checkout code
+        uses: actions/checkout@v3
       
-      - name: Set up JDK 1.8
-        uses: actions/setup-java@v1
+      - name: Set up Node.js
+        uses: actions/setup-node@v3
         with:
-          java-version: 1.8
+          node-version: '18'
+          cache: 'npm'
           
-      - name: Build with Maven
-        run: mvn clean package -DskipTests
+      - name: Install dependencies
+        run: npm ci
         
-      - name: Build the Docker image
-        run: |
-          docker version
-          # 登录阿里云镜像仓库
-          docker login --username=${{ secrets.DOCKER_USERNAME }} --password=${{ secrets.DOCKER_PASSWORD }} registry.cn-hangzhou.aliyuncs.com
-          cd xxl-job-admin
-          # 使用Dockerfile构建镜像
-          docker build . --file Dockerfile --tag registry.cn-hangzhou.aliyuncs.com/kdyzm/xxl-job-admin:2.4.1
-          # 推送镜像到镜像仓库
-          docker push registry.cn-hangzhou.aliyuncs.com/kdyzm/xxl-job-admin:2.4.1
+      - name: Build application
+        run: npm run build
+        
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v2
+        
+      - name: Login to Aliyun Container Registry
+        uses: docker/login-action@v2
+        with:
+          registry: crpi-70wwulanxoezxxja.cn-hangzhou.personal.cr.aliyuncs.com
+          username: ${{ secrets.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_PASSWORD }}
+          
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v4
+        with:
+          context: .
+          file: ./Dockerfile
+          push: true
+          tags: |
+            crpi-70wwulanxoezxxja.cn-hangzhou.personal.cr.aliyuncs.com/ai-travel-planner/frontend:latest
+            crpi-70wwulanxoezxxja.cn-hangzhou.personal.cr.aliyuncs.com/ai-travel-planner/frontend:${{ github.sha }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
