@@ -90,6 +90,25 @@ npm run dev
 npm run build
 ```
 
+## 🐳 Docker 部署
+
+### 拉取 Docker 镜像
+```bash
+docker pull crpi-70wwulanxoezxxja.cn-hangzhou.personal.cr.aliyuncs.com/ai_travel_planner_500/ai_travel_planner:latest
+```
+
+### 运行容器
+```bash
+# 基本运行
+docker run -d -p 80:80 --name ai-travel-planner crpi-70wwulanxoezxxja.cn-hangzhou.personal.cr.aliyuncs.com/ai_travel_planner_500/ai_travel_planner:latest
+
+# 或者使用 docker-compose
+docker-compose up -d
+```
+
+### 访问应用
+应用将在 `http://localhost` 启动（端口 80）
+
 ## 📱 功能演示
 
 ### 1. 智能行程规划
