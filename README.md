@@ -92,22 +92,87 @@ npm run build
 
 ## 🐳 Docker 部署
 
-### 拉取 Docker 镜像
+### 方式一：使用预构建镜像
+
+#### 拉取 Docker 镜像
 ```bash
 docker pull crpi-70wwulanxoezxxja.cn-hangzhou.personal.cr.aliyuncs.com/ai_travel_planner_500/ai_travel_planner:latest
 ```
 
-### 运行容器
+#### 运行容器
 ```bash
 # 基本运行
-docker run -d -p 80:80 --name ai-travel-planner crpi-70wwulanxoezxxja.cn-hangzhou.personal.cr.aliyuncs.com/ai_travel_planner_500/ai_travel_planner:latest
+docker run -d -p 80:80 --name ai-travel-planner \
+  crpi-70wwulanxoezxxja.cn-hangzhou.personal.cr.aliyuncs.com/ai_travel_planner_500/ai_travel_planner:latest
 
-# 或者使用 docker-compose
+# 带环境变量运行（如果需要自定义配置）
+docker run -d -p 80:80 --name ai-travel-planner \
+  -e VITE_DEEPSEEK_API_KEY=your_api_key \
+  -e VITE_AMAP_WEB_KEY=your_amap_key \
+  crpi-70wwulanxoezxxja.cn-hangzhou.personal.cr.aliyuncs.com/ai_travel_planner_500/ai_travel_planner:latest
+```
+
+### 方式二：本地构建
+
+#### 构建镜像
+```bash
+# 基本构建
+docker build -t ai-travel-planner .
+
+# 带构建参数（推荐）
+docker build -t ai-travel-planner \
+  --build-arg VITE_DEEPSEEK_API_KEY=your_deepseek_api_key \
+  --build-arg VITE_AMAP_WEB_KEY=your_amap_web_key \
+  --build-arg VITE_AMAP_WEB_SERVICE_KEY=your_amap_service_key \
+  --build-arg VITE_AMAP_SECURITY_CODE=your_amap_security_code \
+  .
+```
+
+#### 运行本地构建的镜像
+```bash
+docker run -d -p 80:80 --name ai-travel-planner ai-travel-planner
+```
+
+### 方式三：使用 Docker Compose
+
+创建 `docker-compose.override.yml` 文件（可选，用于本地环境变量）：
+```yaml
+version: '3.8'
+services:
+  frontend:
+    build:
+      args:
+        VITE_DEEPSEEK_API_KEY: ${VITE_DEEPSEEK_API_KEY}
+        VITE_AMAP_WEB_KEY: ${VITE_AMAP_WEB_KEY}
+        VITE_AMAP_WEB_SERVICE_KEY: ${VITE_AMAP_WEB_SERVICE_KEY}
+        VITE_AMAP_SECURITY_CODE: ${VITE_AMAP_SECURITY_CODE}
+```
+
+运行：
+```bash
 docker-compose up -d
 ```
 
 ### 访问应用
 应用将在 `http://localhost` 启动（端口 80）
+
+### 🔧 环境变量说明
+
+构建时需要的环境变量：
+- `VITE_DEEPSEEK_API_KEY`: DeepSeek AI API 密钥（必需）
+- `VITE_AMAP_WEB_KEY`: 高德地图 Web 端 API 密钥
+- `VITE_AMAP_WEB_SERVICE_KEY`: 高德地图 Web 服务 API 密钥
+- `VITE_AMAP_SECURITY_CODE`: 高德地图安全密钥
+- `VITE_BAIDU_APP_ID`: 百度语音 APP ID（可选）
+- `VITE_BAIDU_API_KEY`: 百度语音 API 密钥（可选）
+- `VITE_BAIDU_SECRET_KEY`: 百度语音密钥（可选）
+
+### 📝 注意事项
+
+1. **API 密钥配置**: 由于前端应用在构建时需要环境变量，请确保在构建时提供正确的 API 密钥
+2. **安全性**: 不要在公共仓库中暴露真实的 API 密钥
+3. **端口映射**: 容器内部使用 Nginx 在 80 端口提供服务
+4. **健康检查**: 容器包含健康检查，可通过 `docker ps` 查看状态
 
 ## 📱 功能演示
 
